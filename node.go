@@ -59,6 +59,8 @@ type Node struct {
 	split      *SplitStatus // the shared model runs across a group of machines
 	engineURL  string       // the engine's local API while a split is ready
 	stopEngine func()
+	hold       *HoldStatus // blocks this machine holds for the head of a group
+	stopHold   func()
 	cancelPoll context.CancelFunc
 }
 
@@ -258,6 +260,13 @@ func (n *Node) setup(ctx context.Context, want string) {
 	n.saveModels()
 	log.Printf("ready: sharing %v", list)
 	n.setPhase("ready", 100, "")
+	// Blocks held before the restart are held again.
+	if raw, err := os.ReadFile(n.holdFile()); err == nil {
+		var cfg holdConfig
+		if json.Unmarshal(raw, &cfg) == nil && cfg.Model != "" {
+			go n.startHold(cfg)
+		}
+	}
 	// A group set up before the restart is formed again.
 	if raw, err := os.ReadFile(n.splitFile()); err == nil {
 		var cfg splitConfig
@@ -415,6 +424,8 @@ func (n *Node) handleUninstall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	n.stopSplit()
+	n.endHold()
+	n.engineClean(true)                           // llama.cpp and the blocks the engine downloaded
 	os.RemoveAll(filepath.Join(n.home, "engine")) // the engine program this node downloaded
 	n.mu.Lock()
 	models := n.models
@@ -676,6 +687,8 @@ func (n *Node) Handler(hostport string) http.Handler {
 	mux.HandleFunc("POST /api/sharing", n.handleSharing)
 	mux.HandleFunc("POST /api/share", n.handleShare)
 	mux.HandleFunc("POST /api/split", n.handleSplit)
+	mux.HandleFunc("GET /api/plan", n.handlePlan)
+	mux.HandleFunc("POST /api/hold", n.handleHold)
 	mux.HandleFunc("POST /api/uninstall", n.handleUninstall)
 	mux.HandleFunc("POST /api/update", n.handleUpdate)
 	mux.HandleFunc("GET /v1/models", n.handleModels)
@@ -710,6 +723,7 @@ type Status struct {
 	Audit       *AuditStatus      `json:"audit"`
 	Update      *Update           `json:"update"`
 	Split       *SplitStatus      `json:"split"`
+	Hold        *HoldStatus       `json:"hold"`
 	Account     *Account          `json:"account"`
 	Network     *Network          `json:"network"`
 }
@@ -725,7 +739,16 @@ func (n *Node) handleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	if n.split != nil {
 		split := *n.split
+		// The interface shows who is in the group, not the secrets of their lines.
+		split.Machines = make([]string, len(n.split.Machines))
+		for i, m := range n.split.Machines {
+			split.Machines[i], _, _ = strings.Cut(m, "#")
+		}
 		s.Split = &split
+	}
+	if n.hold != nil {
+		hold := *n.hold
+		s.Hold = &hold
 	}
 	n.mu.Unlock()
 	var me Me

@@ -31,21 +31,22 @@ import (
 // That is why the user names them himself, and why the network cannot yet form groups of strangers.
 
 // engineRelease is the engine version this program drives, with the checksum of each build.
-const engineRelease = "v0.1.2"
+const engineRelease = "v0.2.3"
 
 var engineBuilds = map[string]string{
-	"windows/amd64": "72897e43b3d3cdff21e9153101818a0d28531d6aa9378dba29a0b22c390891e7",
-	"linux/amd64":   "9b201edb2c6bb60309b63af04b4873ebbc41c5a17d88915df3485f9eefe8b145",
-	"linux/arm64":   "74aa6c0f67fec771b9f7430b7524900b69cf45a5f32b9f131b6cad5a482d15ad",
-	"darwin/amd64":  "b157e7a75ab475399dcd831cbe458dc70e28982ace63bc39b48be342aadd0833",
-	"darwin/arm64":  "4f1a1962b43fe006828a0dafef55d9bc742c8625468acfce0814a53e10dca5d4",
+	"windows/amd64": "7e1ee7b158bb60954d7b4c223633115e394a3373c391ae0ff0616997ca43b35f",
+	"linux/amd64":   "66d1e6edc8090f73ae2beb142208e2595f19b943856d854546cc13b644c71c4d",
+	"linux/arm64":   "b045aac9eeff4d0020d4a52ebe9063c37ad56064d9b9898b84862209f7459709",
+	"darwin/amd64":  "f16b3ed16342678ce653fde7eb8f9ce803a0c7317e5a3c0627d2f0b21fb7df71",
+	"darwin/arm64":  "1dcd4e7ca6227352011d3efff3fecdb894b14aa48c378444b8b58d54581653a5",
 }
 
 type SplitBlock struct {
 	Machine string `json:"machine"`
 	First   int    `json:"first"`
 	Last    int    `json:"last"`
-	Share   int    `json:"share"` // percent of the model's layers
+	Share   int    `json:"share"`  // percent of the model's layers
+	Blocks  string `json:"blocks"` // the blocks it announced, like 4-9, when it announced some
 }
 
 // SplitStatus is what the interface shows of the group.
@@ -55,6 +56,7 @@ type SplitStatus struct {
 	Error    string       `json:"error,omitempty"`
 	Machines []string     `json:"machines"` // block servers the user named
 	Blocks   []SplitBlock `json:"blocks"`   // who holds which layers, once loaded
+	Of       int          `json:"of"`       // how many blocks the model has, when machines announced theirs
 }
 
 type splitConfig struct {
@@ -67,7 +69,7 @@ func (n *Node) splitFile() string { return filepath.Join(n.home, "split.json") }
 // ensureEngine returns the engine program, downloading the pinned release the first time.
 // T6_ENGINE points to another copy, for people who build the engine themselves.
 func ensureEngine(ctx context.Context, home string) (string, error) {
-	if p := os.Getenv("T6_ENGINE"); p != "" {
+	if p := engineHere(home); p != "" {
 		return p, nil
 	}
 	ext := ""
@@ -80,9 +82,6 @@ func ensureEngine(ctx context.Context, home string) (string, error) {
 		return "", fmt.Errorf("the Tor6IA engine has no build for %s", target)
 	}
 	path := filepath.Join(home, "engine", engineRelease, "tor6ia-engine"+ext)
-	if _, err := os.Stat(path); err == nil {
-		return path, nil
-	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return "", err
 	}
@@ -103,6 +102,38 @@ func ensureEngine(ctx context.Context, home string) (string, error) {
 		return "", err
 	}
 	return path, os.Rename(fresh, path)
+}
+
+// engineHere returns the engine program when this machine already has it, "" otherwise.
+func engineHere(home string) string {
+	if p := os.Getenv("T6_ENGINE"); p != "" {
+		return p
+	}
+	ext := ""
+	if runtime.GOOS == "windows" {
+		ext = ".exe"
+	}
+	path := filepath.Join(home, "engine", engineRelease, "tor6ia-engine"+ext)
+	if _, err := os.Stat(path); err != nil {
+		return ""
+	}
+	return path
+}
+
+// engineClean makes the engine remove what it keeps on this machine: the blocks it downloaded,
+// and with all, llama.cpp and everything else. A machine that never used the engine has nothing.
+func (n *Node) engineClean(all bool) {
+	engine := engineHere(n.home)
+	if engine == "" {
+		return
+	}
+	args := []string{"clean"}
+	if all {
+		args = append(args, "--all")
+	}
+	if out, err := exec.Command(engine, args...).CombinedOutput(); err != nil {
+		log.Printf("engine clean: %v: %s", err, lastLine(string(out)))
+	}
 }
 
 // startSplit loads the model across the group and makes it the model this machine shares.
@@ -162,6 +193,7 @@ func (n *Node) startSplit(cfg splitConfig) {
 	var ready struct {
 		URL    string       `json:"url"`
 		Blocks []SplitBlock `json:"blocks"`
+		Of     int          `json:"model_blocks"`
 	}
 	if err := json.NewDecoder(stdout).Decode(&ready); err != nil || ready.URL == "" {
 		stdin.Close()
@@ -173,7 +205,7 @@ func (n *Node) startSplit(cfg splitConfig) {
 	go io.Copy(io.Discard, stdout)
 
 	n.mu.Lock()
-	n.split = &SplitStatus{Model: cfg.Model, State: "ready", Machines: cfg.Machines, Blocks: ready.Blocks}
+	n.split = &SplitStatus{Model: cfg.Model, State: "ready", Machines: cfg.Machines, Blocks: ready.Blocks, Of: ready.Of}
 	n.engineURL = ready.URL
 	n.stopEngine = func() { stdin.Close() }
 	n.models = []string{cfg.Model}
@@ -269,8 +301,14 @@ func (n *Node) handleSplit(w http.ResponseWriter, r *http.Request) {
 	}
 	for i, m := range req.Machines {
 		m = strings.TrimSpace(m)
-		if host, port, err := net.SplitHostPort(m); err != nil || host == "" || port == "" {
-			refuse(400, "not a machine address (want host:port): "+m)
+		// The line a machine shows: its address, the blocks it holds, the secret of its link.
+		// 192.168.1.20:50052=4-9#5f1c… The secret is never repeated in an answer.
+		addr := m
+		if i := strings.IndexAny(m, "=#"); i >= 0 {
+			addr = m[:i]
+		}
+		if host, port, err := net.SplitHostPort(addr); err != nil || host == "" || port == "" || !strings.Contains(m, "#") {
+			refuse(400, "not the line of a machine (copy the whole line it shows, like 192.168.1.20:50052=4-9#…): "+addr)
 			return
 		}
 		req.Machines[i] = m

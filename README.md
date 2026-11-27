@@ -100,14 +100,20 @@ A model with no machine shows "waiting for a machine". It becomes available the 
 
 A model too big for one machine can be shared by a group. The model is cut into blocks of layers; each machine of the group holds the blocks its memory allows, and yours offers the model to the network and is paid for it.
 
-1. On every other machine of the group, install the [Tor6IA engine](https://github.com/tomDeprez/Tor6IA-engine) and run `tor6ia-engine block --listen 0.0.0.0:50052`.
-2. In the interface, click **Spread a model over several machines…**, choose the model and give the addresses of those machines.
+A model is cut into blocks of about 1 GB, the same way on every machine. Gemma 4 12B has 6 blocks, for example.
+
+1. On each machine of the group, open Tor6IA and click **Hold blocks of a model…**. Choose the model: the interface reads its plan without downloading it, says how many blocks it has and how many your machine can hold. Choose the blocks, for example 2 to 3. The machine downloads those blocks only, loads them, and shows a line to give to the group, like `192.168.1.20:50052=2-3#5f1c…`. The end of the line is a secret: whoever has the line can make this machine compute, nobody else can.
+2. On the machine that holds the conversation, click **Spread a model over several machines…**, choose the model and paste one line per machine. The blocks must make the whole model, each block once: a group with a hole is refused, and the interface says which blocks nobody holds. This machine needs the whole model file.
+
+The block server runs locked in: it cannot read your files, connect anywhere or start a program.
+
+<p align="center"><img src="docs/hold.png" alt="The Tor6IA window to hold blocks of a model: 16 blocks in Gemma 4 31B, 8 advised for this machine, the size to download and the memory used" width="900"></p>
 
 <p align="center"><img src="docs/split.png" alt="The Tor6IA interface showing Gemma 4 26B split in three blocks, with the machine and the layers of each block" width="900"></p>
 
 The interface then shows the split: one bar for the model, one segment per block, and which machine holds which layers. If a machine of the group leaves, the model stops being split and the interface says so; your machine keeps offering it alone when it has the memory.
 
-**Only between machines you trust**, on a private network or a VPN: a block server has no login and no encryption. Groups of strangers formed by the network itself are the next step of the engine, not built yet. Measured on one laptop, Gemma 4 12B split in two answers at 3.3 tokens per second, and still 1.9 with 50 ms of network delay each way.
+**Between people you chose.** What passes between the machines of a group is encrypted, and a machine obeys only who has its line. The machines must be able to reach each other: same network, a VPN, or an open port. Groups of strangers formed by the network itself are the next step of the engine, not built yet. Measured on one laptop, Gemma 4 12B split in two answers at 3.3 tokens per second, and still 1.9 with 50 ms of network delay each way.
 
 ## Credits
 
@@ -239,6 +245,7 @@ No dependency outside the Go standard library.
 | `node.go` | computing for the network, local API, audit |
 | `ollama.go` | Ollama install, models, hardware detection |
 | `split.go` | a model across a group of machines, with the Tor6IA engine |
+| `hold.go` | the blocks this machine holds for a group |
 | `ui/index.html` | interface |
 | `deploy.ps1`, `deploy/remote.sh` | coordinator deployment |
 

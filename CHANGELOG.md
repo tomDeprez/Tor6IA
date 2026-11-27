@@ -2,6 +2,24 @@
 
 Each `## vX.Y.Z` section becomes the notes of that release, and the text of the update window in the program.
 
+## v0.3.0
+
+**Français**
+- « Porter des blocs d'un modèle… » : ta machine porte quelques blocs d'un gros modèle pour un groupe. Elle ne télécharge que ces blocs, pas le modèle entier.
+- L'interface lit le plan du modèle sans le télécharger : combien de blocs il a, combien ta machine peut en porter, ce qu'il faut télécharger et la mémoire utilisée.
+- Le panneau « Blocs portés par ta machine » affiche les blocs téléchargés, chargés et en service, et la ligne à donner au groupe.
+- Un groupe se forme avec les blocs de chaque machine (`adresse=2-3#secret`). Un groupe incomplet est refusé, avec les blocs qui manquent.
+- Le serveur de blocs tourne enfermé : il ne peut ni lire tes fichiers, ni se connecter ailleurs, ni lancer un programme, ni dépasser la mémoire de ses blocs.
+- Ce qui passe entre les machines d'un groupe est chiffré. Une machine n'obéit qu'à qui a sa ligne, qui contient un secret.
+
+**English**
+- "Hold blocks of a model…": your machine holds a few blocks of a large model for a group. It downloads those blocks only, not the whole model.
+- The interface reads the plan of the model without downloading it: how many blocks it has, how many your machine can hold, what to download and the memory used.
+- The panel "Blocks your machine holds" shows the blocks downloaded, loaded and in service, and the line to give to the group.
+- A group is formed with the blocks of each machine (`address=2-3#secret`). An incomplete group is refused, with the blocks that are missing.
+- The block server runs locked in: it cannot read your files, connect anywhere, start a program or use more memory than its blocks need.
+- What passes between the machines of a group is encrypted. A machine obeys only who has its line, which holds a secret.
+
 ## v0.2.1
 
 **Français**

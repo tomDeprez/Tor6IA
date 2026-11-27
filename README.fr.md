@@ -100,14 +100,20 @@ Un modèle sans machine affiche « en attente d'une machine ». Il devient dispo
 
 Un modèle trop gros pour une machine peut être partagé par un groupe. Le modèle est coupé en blocs de couches ; chaque machine du groupe porte les blocs que sa mémoire permet, et la tienne propose le modèle au réseau et reçoit le paiement.
 
-1. Sur chaque autre machine du groupe, installe le [moteur Tor6IA](https://github.com/tomDeprez/Tor6IA-engine) et lance `tor6ia-engine block --listen 0.0.0.0:50052`.
-2. Dans l'interface, clique sur **Répartir un modèle sur plusieurs machines…**, choisis le modèle et donne les adresses de ces machines.
+Un modèle est découpé en blocs d'environ 1 Go, de la même façon sur toutes les machines. Gemma 4 12B a 6 blocs, par exemple.
+
+1. Sur chaque machine du groupe, ouvre Tor6IA et clique sur **Porter des blocs d'un modèle…**. Choisis le modèle : l'interface lit son plan sans le télécharger, dit combien de blocs il a et combien ta machine peut en porter. Choisis les blocs, par exemple 2 à 3. La machine ne télécharge que ces blocs, les charge, et affiche une ligne à donner au groupe, comme `192.168.1.20:50052=2-3#5f1c…`. La fin de la ligne est un secret : qui a la ligne peut faire calculer cette machine, personne d'autre.
+2. Sur la machine qui tient la conversation, clique sur **Répartir un modèle sur plusieurs machines…**, choisis le modèle et colle une ligne par machine. Les blocs doivent faire le modèle entier, chaque bloc une seule fois : un groupe avec un trou est refusé, et l'interface dit quels blocs personne ne porte. Cette machine a besoin du fichier entier du modèle.
+
+Le serveur de blocs tourne enfermé : il ne peut ni lire tes fichiers, ni se connecter ailleurs, ni lancer un programme.
+
+<p align="center"><img src="docs/hold.png" alt="La fenêtre de Tor6IA pour porter des blocs d'un modèle : 16 blocs dans Gemma 4 31B, 8 conseillés pour cette machine, la taille à télécharger et la mémoire utilisée" width="900"></p>
 
 <p align="center"><img src="docs/split.png" alt="L'interface de Tor6IA affichant Gemma 4 26B réparti en trois blocs, avec la machine et les couches de chaque bloc" width="900"></p>
 
 L'interface affiche alors le découpage : une barre pour le modèle, un segment par bloc, et quelle machine porte quelles couches. Si une machine du groupe s'en va, le modèle n'est plus réparti et l'interface le dit ; ta machine continue à le proposer seule si elle en a la mémoire.
 
-**Uniquement entre machines de confiance**, sur un réseau privé ou un VPN : un serveur de blocs n'a ni identification ni chiffrement. Les groupes d'inconnus formés par le réseau lui-même sont la prochaine étape du moteur, pas encore construite. Mesuré sur un portable, Gemma 4 12B coupé en deux répond à 3,3 tokens par seconde, et encore 1,9 avec 50 ms de délai réseau dans chaque sens.
+**Entre personnes que tu as choisies.** Ce qui passe entre les machines d'un groupe est chiffré, et une machine n'obéit qu'à qui a sa ligne. Les machines doivent pouvoir se joindre : même réseau, VPN, ou port ouvert. Les groupes d'inconnus formés par le réseau lui-même sont la prochaine étape du moteur, pas encore construite. Mesuré sur un portable, Gemma 4 12B coupé en deux répond à 3,3 tokens par seconde, et encore 1,9 avec 50 ms de délai réseau dans chaque sens.
 
 ## Les crédits
 
@@ -242,6 +248,7 @@ Aucune dépendance hors de la bibliothèque standard de Go.
 | `node.go` | calcul pour le réseau, API locale, audit |
 | `ollama.go` | installation d'Ollama, modèles, détection du matériel |
 | `split.go` | un modèle réparti sur un groupe de machines, avec le moteur Tor6IA |
+| `hold.go` | les blocs que cette machine porte pour un groupe |
 | `ui/index.html` | interface |
 | `deploy.ps1`, `deploy/remote.sh` | déploiement du coordinateur |
 

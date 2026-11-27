@@ -124,6 +124,16 @@
   .mine .name { font: 700 19px/1.2 var(--display); }
   .mine .note { margin: 3px 0 0; }
   .linkish { display: block; }
+  .linkish[hidden] { display: none; }
+  .bar { height: 5px; background: var(--line); border-radius: 3px; margin-top: 8px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--s-work); width: 0; transition: width .4s; }
+  #holdDlg p { font-size: 14px; margin: 0 0 12px; }
+  #holdDlg label { display: block; margin: 0 0 12px; cursor: default; }
+  #holdDlg select { display: block; width: 100%; margin-top: 6px; }
+  #holdDlg .range { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 14px; }
+  #holdDlg input[type=number] { width: 72px; background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 7px 8px; font: inherit; }
+  #holdDlg .warn { color: var(--debt); }
+  #holdPlan { font-weight: 600; }
   .pickRow { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
   .pickRow .name { font: 700 18px/1.2 var(--display); }
   .pickRow .note { margin: 2px 0 0; }
@@ -196,7 +206,23 @@
     </div>
     <button type="button" class="linkish" id="mineChange"></button>
     <button type="button" class="linkish" id="splitOpen" data-t="splitOpen"></button>
+    <button type="button" class="linkish" id="holdOpen" data-t="holdOpen"></button>
     <button type="button" class="linkish" id="mineStop"></button>
+  </section>
+
+  <section id="holdBox" hidden>
+    <h2 data-t="holdTitle"></h2>
+    <div class="mine">
+      <div class="name" id="holdName"></div>
+      <div class="note" id="holdState"></div>
+      <div class="bar" id="holdBar" hidden><i></i></div>
+    </div>
+    <div class="blocksBar" id="holdBlocks"></div>
+    <div id="holdGive" hidden>
+      <div class="note" data-t="holdGiveLabel"></div>
+      <code id="holdAnnounce" style="display:inline-block;margin-top:4px;user-select:all"></code>
+    </div>
+    <button type="button" class="linkish" id="holdStop" data-t="holdStop"></button>
   </section>
 
   <section id="splitBox" hidden>
@@ -264,12 +290,27 @@
   <div class="acts" style="margin-top:18px"><button type="button" id="pNo" data-t="cancel"></button></div>
 </dialog>
 
+<dialog id="holdDlg" aria-labelledby="hTitle">
+  <h3 id="hTitle" data-t="holdAsk"></h3>
+  <p data-t="hold1"></p>
+  <label><span data-t="holdModel"></span><select id="hModel"></select></label>
+  <p id="holdPlan"></p>
+  <div class="range"><span data-t="holdFrom"></span><input type="number" id="hFirst" min="1" value="1"><span data-t="holdTo"></span><input type="number" id="hLast" min="1" value="1"></div>
+  <p class="note" id="hCost" style="margin:0 0 12px"></p>
+  <p class="warn" data-t="splitWarn"></p>
+  <p class="msg err" id="hError" hidden></p>
+  <div class="acts">
+    <button type="button" id="hNo" data-t="cancel"></button>
+    <button type="button" class="go" id="hYes" data-t="holdGo"></button>
+  </div>
+</dialog>
+
 <dialog id="splitDlg" aria-labelledby="sTitle">
   <h3 id="sTitle" data-t="splitAsk"></h3>
   <p data-t="split1"></p>
-  <p><span data-t="split2"></span> <code>tor6ia-engine block --listen 0.0.0.0:50052</code></p>
+  <p data-t="split2"></p>
   <label><span data-t="splitModel"></span><select id="sModel"></select></label>
-  <label><span data-t="splitMachines"></span><textarea id="sMachines" placeholder="192.168.1.20:50052&#10;192.168.1.21:50052"></textarea></label>
+  <label><span data-t="splitMachines"></span><textarea id="sMachines" placeholder="192.168.1.20:50052=1-3#…&#10;192.168.1.21:50052=4-9#…"></textarea></label>
   <p class="warn" data-t="splitWarn"></p>
   <p class="msg err" id="sError" hidden></p>
   <div class="acts">
@@ -339,9 +380,18 @@ const FR = {
   splitOpen: "Répartir un modèle sur plusieurs machines…", splitTitle: "Découpage du modèle", splitStop: "Arrêter le découpage",
   splitAsk: "Répartir un modèle sur plusieurs machines", splitGo: "Répartir",
   split1: "Le modèle est coupé en blocs de couches. Chaque machine du groupe en porte selon sa mémoire, et ta machine le propose au réseau. Tu peux ainsi partager un modèle trop gros pour une seule machine.",
-  split2: "Sur chaque autre machine du groupe, installe le moteur Tor6IA et lance :",
-  splitModel: "Modèle à répartir", splitMachines: "Adresses des machines, une par ligne",
-  splitWarn: "Uniquement des machines de confiance, sur un réseau privé ou un VPN : un serveur de blocs n'a ni mot de passe ni chiffrement.",
+  split2: "Sur chaque autre machine du groupe : « Porter des blocs d'un modèle… ». Elle affiche alors une ligne à copier ici.",
+  splitModel: "Modèle à répartir", splitMachines: "La ligne de chaque machine, une par ligne",
+  holdOpen: "Porter des blocs d'un modèle…", holdTitle: "Blocs portés par ta machine", holdStop: "Ne plus porter ces blocs",
+  holdAsk: "Porter des blocs d'un modèle", holdGo: "Porter ces blocs",
+  hold1: "Un gros modèle est découpé en blocs d'environ 1 Go. Ta machine en porte quelques-uns pour un groupe : elle ne télécharge que ceux-là, et calcule sa part de chaque réponse. Le serveur de blocs tourne enfermé : il ne peut ni lire tes fichiers, ni se connecter ailleurs, ni dépasser la mémoire de ses blocs.",
+  holdModel: "Modèle", holdFrom: "Du bloc", holdTo: "au bloc",
+  holdReading: "Lecture du plan du modèle…", holdBlocksOf: "blocs dans ce modèle. Pour ta machine :", holdAdvised: "conseillés",
+  holdNone: "Ta machine n'a pas assez de mémoire libre pour porter un bloc sans ralentir.",
+  holdCost1: "À télécharger :", holdCost2: "Mémoire utilisée :",
+  holdGetting: "Téléchargement des blocs", holdBlocks: "Blocs", holdOf: "sur", holdServing: "chargés et en service",
+  holdGiveLabel: "À donner à la personne qui tient la conversation du groupe :",
+  splitWarn: "La ligne d'une machine contient un secret : qui a la ligne peut la faire calculer. Donne-la seulement aux personnes de ton groupe. Ce qui passe entre les machines est chiffré.",
   splitStarting: "Chargement sur le groupe :", splitReady: "réparti en", blockOne: "bloc", blockMany: "blocs", layers: "couches", to: "à",
   waiting: "Attend une machine assez puissante",
   insufficient_credits: "Pas assez de crédits. Laisse le partage activé : chaque calcul fait pour un autre t'en rapporte.",
@@ -408,9 +458,18 @@ const EN = {
   splitOpen: "Spread a model over several machines…", splitTitle: "Model split", splitStop: "Stop the split",
   splitAsk: "Spread a model over several machines", splitGo: "Spread",
   split1: "The model is cut into blocks of layers. Each machine of the group holds some, according to its memory, and your machine offers it to the network. This way you can share a model too big for a single machine.",
-  split2: "On every other machine of the group, install the Tor6IA engine and run:",
-  splitModel: "Model to spread", splitMachines: "Machine addresses, one per line",
-  splitWarn: "Only machines you trust, on a private network or a VPN: a block server has no password and no encryption.",
+  split2: "On every other machine of the group: \"Hold blocks of a model…\". It then shows a line to copy here.",
+  splitModel: "Model to spread", splitMachines: "The line of each machine, one per line",
+  holdOpen: "Hold blocks of a model…", holdTitle: "Blocks your machine holds", holdStop: "Stop holding these blocks",
+  holdAsk: "Hold blocks of a model", holdGo: "Hold these blocks",
+  hold1: "A large model is cut into blocks of about 1 GB. Your machine holds a few of them for a group: it downloads only those, and computes its share of every answer. The block server runs locked in: it cannot read your files, connect anywhere or use more memory than its blocks need.",
+  holdModel: "Model", holdFrom: "From block", holdTo: "to block",
+  holdReading: "Reading the model's plan…", holdBlocksOf: "blocks in this model. For your machine:", holdAdvised: "advised",
+  holdNone: "Your machine does not have enough free memory to hold a block without slowing down.",
+  holdCost1: "To download:", holdCost2: "Memory used:",
+  holdGetting: "Downloading blocks", holdBlocks: "Blocks", holdOf: "of", holdServing: "loaded and in service",
+  holdGiveLabel: "Give this to the person who holds the group's conversation:",
+  splitWarn: "The line of a machine holds a secret: whoever has the line can make it compute. Give it only to the people of your group. What passes between the machines is encrypted.",
   splitStarting: "Loading across the group:", splitReady: "split in", blockOne: "block", blockMany: "blocks", layers: "layers", to: "to",
   waiting: "Waits for a machine powerful enough",
   insufficient_credits: "Not enough credits. Keep sharing on: every job done for someone else earns some.",
@@ -513,6 +572,7 @@ function paint(s) {
   offerUpdate(s);
   paintSplit(s);
   paintMine(s);
+  paintHold(s);
 
   $("nNodes").textContent = net ? num(net.workers) : "–";
   $("nJobs").textContent = net ? num(net.jobs_done) : "–";
@@ -620,10 +680,86 @@ function paintSplit(s) {
   $("splitRows").replaceChildren(...blocks.map((b, i) => {
     const row = el("div", "blockRow"), chip = el("span", "chip");
     chip.style.background = blockColours[i % blockColours.length];
-    row.append(chip, el("span", "where", b.machine), el("span", "what2", `${T.layers} ${b.first} ${T.to} ${b.last}, ${b.share} %`));
+    const held = b.blocks ? `${count(Number(b.blocks.split("-").pop()) - Number(b.blocks.split("-")[0]) + 1, T.blockOne, T.blockMany)} (${b.blocks}), ` : "";
+    row.append(chip, el("span", "where", b.machine), el("span", "what2", `${held}${T.layers} ${b.first} ${T.to} ${b.last}`));
     return row;
   }));
 }
+
+// The blocks this machine holds for a group: how many are downloaded, loaded and in service.
+function paintHold(s) {
+  const h = s.hold;
+  $("holdBox").hidden = !h;
+  $("holdOpen").hidden = !!h;
+  if (!h) return;
+  const held = h.last - h.first + 1;
+  const known = ((s.network && s.network.models) || []).find(m => m.id === h.model);
+  $("holdName").textContent = `${known ? known.name : h.model} : ${count(held, T.blockOne, T.blockMany)} ${T.holdOf} ${h.of}`;
+  const state = $("holdState");
+  state.style.color = h.state === "error" ? "var(--bad)" : "";
+  state.textContent = h.state === "error" ? h.error
+    : h.state === "ready" ? `${T.holdBlocks} ${h.first} ${T.to} ${h.last} : ${T.holdServing}`
+    : `${T.holdGetting} ${h.first} ${T.to} ${h.last} : ${h.pct} %`;
+  // One segment per block of the model: the ones this machine holds are coloured.
+  $("holdBlocks").replaceChildren(...Array.from({ length: h.of }, (_, i) => {
+    const seg = el("i");
+    seg.style.flex = "1 0 0";
+    seg.style.background = i + 1 >= h.first && i + 1 <= h.last ? blockColours[0] : "var(--line)";
+    return seg;
+  }));
+  $("holdBar").hidden = h.state !== "downloading";
+  $("holdBar").firstChild.style.width = h.pct + "%";
+  $("holdGive").hidden = h.state !== "ready";
+  $("holdAnnounce").textContent = h.announce || "";
+}
+
+// The dialog reads the plan of the chosen model: how many blocks it has, and how many this machine can hold.
+let planOf = null;
+async function readPlan() {
+  planOf = null;
+  $("holdPlan").textContent = T.holdReading;
+  $("hCost").textContent = "";
+  $("hError").hidden = true;
+  const resp = await fetch("/api/plan?model=" + encodeURIComponent($("hModel").value));
+  const plan = await resp.json();
+  if (!resp.ok) { $("holdPlan").textContent = plan.error; return; }
+  planOf = plan;
+  const n = plan.blocks.length, advised = plan.advised_blocks;
+  $("holdPlan").textContent = `${n} ${T.holdBlocksOf} ${advised} ${T.holdAdvised}.` + (advised ? "" : " " + T.holdNone);
+  for (const id of ["hFirst", "hLast"]) $(id).max = n;
+  $("hFirst").value = 1;
+  $("hLast").value = Math.max(1, advised);
+  holdCost();
+}
+function holdCost() {
+  if (!planOf) return;
+  const a = Number($("hFirst").value), b = Number($("hLast").value);
+  if (!(a >= 1 && b >= a && b <= planOf.blocks.length)) { $("hCost").textContent = ""; return; }
+  const bytes = planOf.blocks.slice(a - 1, b).reduce((sum, x) => sum + x.size, 0), gb = v => (v / 2 ** 30).toFixed(1);
+  $("hCost").textContent = `${T.holdCost1} ${gb(bytes)} Go. ${T.holdCost2} ${gb(bytes * 1.3)} Go.`;
+}
+$("holdOpen").addEventListener("click", () => {
+  const models = (last && last.network && last.network.models) || [];
+  $("hModel").replaceChildren(...models.map(m => new Option(`${m.name} (${m.size_gb} Go)`, m.id)));
+  $("hModel").value = models.length ? models[models.length - 1].id : "";
+  $("holdDlg").showModal();
+  readPlan();
+});
+$("hModel").addEventListener("change", readPlan);
+$("hFirst").addEventListener("input", holdCost);
+$("hLast").addEventListener("input", holdCost);
+$("hNo").addEventListener("click", () => $("holdDlg").close());
+$("hYes").addEventListener("click", async () => {
+  const resp = await post("/api/hold", { on: true, model: $("hModel").value, first: Number($("hFirst").value), last: Number($("hLast").value) });
+  if (!resp.ok) {
+    $("hError").hidden = false;
+    $("hError").textContent = (await resp.json()).error;
+    return;
+  }
+  $("holdDlg").close();
+  refresh();
+});
+$("holdStop").addEventListener("click", async () => { await post("/api/hold", { on: false }); refresh(); });
 
 $("splitOpen").addEventListener("click", () => {
   const models = (last && last.network && last.network.models) || [];
