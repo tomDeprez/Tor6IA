@@ -276,6 +276,9 @@ func (c *Coordinator) networkLocked() Network {
 		for i := range n.Models {
 			if slices.Contains(w.models, n.Models[i].ID) {
 				n.Models[i].Workers++
+				if w.job != nil {
+					n.Models[i].Busy++
+				}
 			}
 		}
 	}

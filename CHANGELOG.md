@@ -2,6 +2,18 @@
 
 Each `## vX.Y.Z` section becomes the notes of that release, and the text of the update window in the program.
 
+## v0.1.3
+
+**Français**
+- Une machine partage un seul modèle à la fois : « Choisir » remplace le modèle en cours, et propose de supprimer l'ancien du disque.
+- Pendant qu'une demande attend, l'interface dit pourquoi : combien de machines sont sur ce modèle, et si elles sont toutes occupées.
+- La liste des modèles montre les machines occupées.
+
+**English**
+- A machine shares one model at a time: "Choose" replaces the current model, and offers to delete the old one from the disk.
+- While a request waits, the interface says why: how many machines are on that model, and whether they are all busy.
+- The model list shows the busy machines.
+
 ## v0.1.2
 
 **Français**

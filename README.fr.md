@@ -74,7 +74,7 @@ Le gros bouton en haut dit ce que fait ta machine. Un clic met le partage en pau
 | Gris | En pause, ou coordinateur injoignable |
 | Rouge | Problème, ou alerte : le registre a échoué à l'audit |
 
-La liste des modèles montre combien de machines proposent chacun, son prix, et combien de tokens ton solde permet. **Partager** propose un modèle de plus depuis ta machine. Le bouton demande toujours confirmation et dit ce que ça implique : taille du téléchargement, vitesse sur ton matériel, ce que tu gagnes.
+La liste des modèles montre combien de machines proposent chacun, son prix, et combien de tokens ton solde permet. Une machine partage un seul modèle à la fois. **Choisir** passe à un autre. Le bouton demande toujours confirmation et dit ce que ça implique : taille du téléchargement, vitesse sur ton matériel, ce que tu gagnes, et s'il faut supprimer l'ancien modèle.
 
 **Partagé ✓** arrête de partager un modèle, et peut supprimer ses fichiers pour libérer le disque. Un téléchargement en cours s'annule. **Désinstaller Tor6IA…**, en bas, retire tout : la machine quitte le réseau, les modèles partagés et le programme sont supprimés. Quand une machine se met en pause ou s'en va, les autres voient aussitôt qu'il manque une machine pour ses modèles.
 

@@ -234,12 +234,18 @@ const FR = {
   online: "en ligne", mine: "Sur ta machine, gratuit", tokenForYou: "token avec ton solde", tokensForYou: "tokens avec ton solde", noOne: "personne",
   verified: "vérifié", entry: "écriture", entries: "écritures", checking: "vérification…",
   free: "Calculé sur ta machine, gratuit", cost: "crédits",
-  share: "Partager", shared: "Partagé ✓", unshare: "Ne plus partager", tooSmall: "Trop gros", cancel: "Annuler",
+  share: "Partager", choose: "Choisir", shared: "Partagé ✓", unshare: "Ne plus partager", tooSmall: "Trop gros", cancel: "Annuler",
+  switchTo: "Passer à", busyOne: "occupée", busyMany: "occupées",
+  cReplace: "Ta machine partage un seul modèle à la fois. Elle arrête de proposer :",
+  cDeleteOld: "Supprimer l'ancien modèle de mon disque. Espace libéré :",
+  waitLocal: "Ta machine calcule…",
+  waitRun: "Demande chiffrée envoyée. Machines sur ce modèle :", waitRun2: "L'une d'elles calcule ta réponse…",
+  waitBusy: "Toutes les machines de ce modèle sont occupées :", waitBusy2: "Ta demande attend la première qui se libère…",
   downloading: "Téléchargement",
   cDownload: "Téléchargement, si le modèle n'est pas déjà sur ta machine :",
   cSlow: "Ta machine n'a pas de carte graphique assez grande pour ce modèle. Il tournera sur le processeur : réponses lentes, machine très sollicitée pendant un calcul.",
   cFast: "Ta machine a les ressources pour ce modèle.",
-  cStay: "Ta machine reste connectée pendant le téléchargement. Le modèle est proposé au réseau dès qu'il est prêt, sans rien relancer.",
+  cStay: "Ta machine reste connectée pendant le téléchargement. Le changement se fait dès que le modèle est prêt, sans rien relancer.",
   cEarn: "Gain par token calculé pour les autres :",
   cStop: "Ta machine ne proposera plus ce modèle au réseau. Un calcul en cours se termine.",
   cDelete: "Supprimer aussi les fichiers de mon disque. Espace libéré :",
@@ -280,12 +286,18 @@ const EN = {
   online: "online", mine: "On your machine, free", tokenForYou: "token with your balance", tokensForYou: "tokens with your balance", noOne: "no one",
   verified: "verified", entry: "entry", entries: "entries", checking: "checking…",
   free: "Computed on your machine, free", cost: "credits",
-  share: "Share", shared: "Shared ✓", unshare: "Stop sharing", tooSmall: "Too big", cancel: "Cancel",
+  share: "Share", choose: "Choose", shared: "Shared ✓", unshare: "Stop sharing", tooSmall: "Too big", cancel: "Cancel",
+  switchTo: "Switch to", busyOne: "busy", busyMany: "busy",
+  cReplace: "Your machine shares one model at a time. It stops offering:",
+  cDeleteOld: "Delete the old model from my disk. Space freed:",
+  waitLocal: "Your machine is computing…",
+  waitRun: "Encrypted request sent. Machines on this model:", waitRun2: "One of them is computing your answer…",
+  waitBusy: "All the machines of this model are busy:", waitBusy2: "Your request waits for the first one to be free…",
   downloading: "Downloading",
   cDownload: "Download, if the model is not on your machine yet:",
   cSlow: "Your machine has no graphics card large enough for this model. It will run on the processor: slow answers, and a very busy machine during a job.",
   cFast: "Your machine has the resources for this model.",
-  cStay: "Your machine stays connected during the download. The model is offered to the network as soon as it is ready, with nothing to restart.",
+  cStay: "Your machine stays connected during the download. The switch happens as soon as the model is ready, with nothing to restart.",
   cEarn: "Earnings per token computed for others:",
   cStop: "Your machine will no longer offer this model to the network. A running job finishes.",
   cDelete: "Also delete the files from my disk. Space freed:",
@@ -410,7 +422,7 @@ function paint(s) {
 
   const mine = s.phase === "ready" ? (s.hosted || []) : [];
   const can = a ? Math.max(a.spendable, 0) : 0;
-  const sig = JSON.stringify([net.models.map(m => [m.id, m.workers]), mine, can, s.pull, s.phase, s.capacity]);
+  const sig = JSON.stringify([net.models.map(m => [m.id, m.workers, m.busy]), mine, can, s.pull, s.phase, s.capacity]);
   if (sig === catalogSig) return;
   catalogSig = sig;
   const sel = $("model"), keep = sel.value;
@@ -431,7 +443,8 @@ function paint(s) {
     pick.type = "button";
     const top = el("span", "top"), title = el("span");
     title.append(el("span", "name", m.name), el("span", "price", `×${m.weight}`));
-    top.append(title, el("span", "count" + (m.workers ? "" : " none"), m.workers ? `${num(m.workers)} ${T.online}` : T.noOne));
+    const online = !m.workers ? T.noOne : `${num(m.workers)} ${T.online}` + (m.busy ? `, ${num(m.busy)} ${m.busy > 1 ? T.busyMany : T.busyOne}` : "");
+    top.append(title, el("span", "count" + (m.workers ? "" : " none"), online));
     const info = pull ? (pull.error || `${T.downloading} ${Math.floor(pull.pct)} %`) : hosted ? T.mine
       : !m.workers ? T.waiting
       : `≈ ${count(Math.floor(can / m.weight), T.tokenForYou, T.tokensForYou)}`;
@@ -441,7 +454,7 @@ function paint(s) {
     // Right: offer this model from this machine. Always confirmed first.
     const downloading = pull && !pull.error;
     const share = el("button", "share" + (hosted ? " on" : ""),
-      hosted ? T.shared : downloading ? T.cancel : cap === "no" ? T.tooSmall : T.share);
+      hosted ? T.shared : downloading ? T.cancel : cap === "no" ? T.tooSmall : mine.length ? T.choose : T.share);
     share.type = "button";
     share.disabled = s.phase !== "ready" || (!hosted && !downloading && cap === "no");
     share.onclick = () => downloading ? askCancel(m) : askShare(m, !hosted, cap);
@@ -508,10 +521,14 @@ function offerUpdate(s) {
 const post = (path, body) => fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 
 function askShare(m, on, cap) {
+  // A machine offers one model: choosing another replaces the current one.
+  const old = ((last && last.network && last.network.models) || []).filter(x => x.id !== m.id && ((last && last.hosted) || []).includes(x.id));
+  const lines = [`${T.cDownload} ${m.size_gb} Go`, cap === "slow" ? T.cSlow : T.cFast, T.cStay, `${T.cEarn} ×${m.weight}`];
+  if (on && old.length) lines.unshift(`${T.cReplace} ${old.map(x => x.name).join(", ")}`);
   if (on) ask({
-    title: `${T.share} ${m.name} ?`, yes: T.share,
-    lines: [`${T.cDownload} ${m.size_gb} Go`, cap === "slow" ? T.cSlow : T.cFast, T.cStay, `${T.cEarn} ×${m.weight}`],
-    run: () => post("/api/share", { model: m.id, on: true })
+    title: old.length ? `${T.switchTo} ${m.name} ?` : `${T.share} ${m.name} ?`, yes: old.length ? T.choose : T.share, lines,
+    option: old.length ? `${T.cDeleteOld} ${num(Math.round(old.reduce((sum, x) => sum + x.size_gb, 0) * 10) / 10)} Go` : "", checked: true,
+    run: del => post("/api/share", { model: m.id, on: true, delete: del && old.length > 0 })
   });
   else ask({
     title: `${T.unshare} ${m.name} ?`, yes: T.unshare,
@@ -558,6 +575,14 @@ $("input").addEventListener("keydown", e => {
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("form").requestSubmit(); }
 });
 
+// What a request is waiting for, from the live state of its model: who is connected, who is busy.
+function waitText() {
+  const id = $("model").value, m = ((last && last.network && last.network.models) || []).find(x => x.id === id);
+  if (last && last.phase === "ready" && (last.hosted || []).includes(id)) return T.waitLocal;
+  if (!m || !m.workers) return "…";
+  return m.busy >= m.workers ? `${T.waitBusy} ${num(m.workers)}. ${T.waitBusy2}` : `${T.waitRun} ${num(m.workers)}. ${T.waitRun2}`;
+}
+
 function setBusy(ctl) {
   busy = ctl;
   $("send").textContent = ctl ? T.stop : T.send;
@@ -573,10 +598,11 @@ $("form").addEventListener("submit", async e => {
   $("input").style.height = "auto";
   turns.push({ role: "user", content: text });
   bubble("user", text);
-  const out = bubble("bot", "…");
+  const out = bubble("bot", waitText());
   const ctl = new AbortController();
   setBusy(ctl);
   let answer = "", meta = [];
+  const waiting = setInterval(() => { if (!answer) out.textContent = waitText(); }, 1000);
   try {
     const resp = await fetch("/v1/chat/completions", {
       method: "POST", signal: ctl.signal, headers: { "Content-Type": "application/json" },
@@ -611,6 +637,7 @@ $("form").addEventListener("submit", async e => {
       if (answer) out.after(m); else out.replaceWith(m);
     } else if (!answer) out.remove();
   }
+  clearInterval(waiting);
   if (answer) {
     turns.push({ role: "assistant", content: answer });
     for (const line of meta) out.append(el("div", "meta", line));

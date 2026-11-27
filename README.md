@@ -74,7 +74,7 @@ The large button at the top says what your machine is doing. Click it to pause o
 | Grey | Paused, or coordinator unreachable |
 | Red | Problem, or alert: the ledger failed its audit |
 
-The model list shows how many machines offer each model, its price, and how many tokens your balance buys. **Share** offers one more model from your machine. It always asks first and says what it implies: download size, speed on your hardware, what you earn.
+The model list shows how many machines offer each model, its price, and how many tokens your balance buys. A machine shares one model at a time. **Choose** switches to another one. It always asks first and says what it implies: download size, speed on your hardware, what you earn, and whether to delete the old model.
 
 **Shared ✓** stops sharing a model, and can delete its files to free the disk. A download in progress can be cancelled. **Uninstall Tor6IA…** at the bottom removes everything: the machine leaves the network, the shared models and the program are deleted. When a machine pauses or leaves, the others see at once that its models lost a machine.
 

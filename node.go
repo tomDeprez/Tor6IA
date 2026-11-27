@@ -204,6 +204,9 @@ func (n *Node) setup(ctx context.Context, want string) {
 	}
 	// The network may have changed its models since the list was saved: forget the ones it dropped.
 	list = slices.DeleteFunc(list, func(id string) bool { return offered(id) < 0 })
+	if len(list) > 1 {
+		list = list[len(list)-1:] // lists from before "one model per machine": keep the last one chosen
+	}
 	if len(list) == 0 {
 		list = []string{pickModel(net.Models, n.vramMB)}
 	}
@@ -234,9 +237,11 @@ func (n *Node) setup(ctx context.Context, want string) {
 	n.setPhase("ready", 100, "")
 }
 
-// share adds a model to the ones this machine offers. It downloads it first when needed;
-// the machine stays connected meanwhile and the new model is announced at the next poll.
-func (n *Node) share(id string) {
+// share makes id the model this machine offers. A machine offers one model at a time, so its
+// memory serves one model well instead of swapping several. The download comes first: the
+// machine keeps offering its current model until the new one is ready, then switches.
+// deleteOld also removes the replaced model's files.
+func (n *Node) share(id string, deleteOld bool) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	progress := func(pct float64, problem string) {
@@ -262,13 +267,20 @@ func (n *Node) share(id string) {
 	}
 	n.mu.Lock()
 	n.pull = nil
-	if !slices.Contains(n.models, id) {
-		n.models = append(n.models, id)
-	}
+	replaced := slices.DeleteFunc(slices.Clone(n.models), func(m string) bool { return m == id })
+	n.models = []string{id}
 	n.repollLocked()
 	n.mu.Unlock()
 	n.saveModels()
 	log.Printf("now sharing %s", id)
+	for _, old := range replaced {
+		if !deleteOld {
+			break
+		}
+		if err := deleteModel(ctx, n.ollama, old); err != nil {
+			log.Printf("replaced model %s not deleted: %v", old, err)
+		}
+	}
 }
 
 // leave tells the coordinator that this machine stops computing, so that the model
@@ -294,7 +306,7 @@ func (n *Node) handleShare(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Model  string `json:"model"`
 		On     bool   `json:"on"`
-		Delete bool   `json:"delete"` // with on=false: also remove the files from the disk
+		Delete bool   `json:"delete"` // also remove from the disk: this model (on=false) or the one it replaces (on=true)
 	}
 	refuse := func(status int, msg string) { writeJSON(w, status, map[string]string{"error": msg}) }
 	if json.NewDecoder(io.LimitReader(r.Body, 1024)).Decode(&req) != nil {
@@ -350,7 +362,7 @@ func (n *Node) handleShare(w http.ResponseWriter, r *http.Request) {
 			refuse(400, "this machine cannot run that model")
 			return
 		}
-		go n.share(req.Model)
+		go n.share(req.Model, req.Delete)
 	}
 	writeJSON(w, 200, map[string]bool{"ok": true})
 }
