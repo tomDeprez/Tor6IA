@@ -131,6 +131,8 @@ Le relais fait passer ce que les machines échangent quand elles ne peuvent pas 
 
 **Une machine qui calcule faux est trouvée et écartée.** Le coordinateur envoie des tests dont il connaît la réponse. Quand un test échoue à travers une chaîne, il remplace un porteur à la fois et recommence. Un porteur est exclu pour un jour quand la chaîne échoue avec lui, réussit sans lui, puis échoue encore quand on le remet : deux tests doivent concorder, parce qu'un test peut échouer par malchance. Mesuré : un porteur qui renvoie du bruit est dehors après 4 tests, environ une minute.
 
+Pour l'essayer à plusieurs, suis le [guide d'essai](docs/ESSAI.md).
+
 À savoir avant d'utiliser ou de porter un modèle en blocs :
 
 - Les machines d'une chaîne voient passer les nombres du calcul, pas le texte. Un expert pourrait en tirer une partie du sens. La machine qui tient la conversation voit le texte, comme toute machine qui répond. L'interface le dit avant que tu poses ta question.

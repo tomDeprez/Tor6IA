@@ -131,6 +131,8 @@ The relay carries what the machines exchange when they cannot reach each other d
 
 **A machine that computes wrong is found and left out.** The coordinator sends test jobs with a known answer. When one fails through a chain, it replaces one holder at a time and tests again. A holder is excluded for a day when the chain fails with it, passes without it, and fails again when it is put back: two tests must agree, because a test can fail by bad luck. Measured: a holder that answers noise is out after 4 tests, about a minute.
 
+To try it with several people, follow the [trial guide](docs/ESSAI.md) (in French).
+
 What to know before using or holding a model in blocks:
 
 - The machines of a chain see the numbers of the computation pass, not the text. An expert could draw part of the meaning from them. The machine that holds the conversation sees the text, as any machine that answers does. The interface says so before you ask.

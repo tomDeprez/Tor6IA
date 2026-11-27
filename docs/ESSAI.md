@@ -26,6 +26,10 @@ Commence par Llama 3.2 3B pour vérifier que tout le monde se voit, puis passe �
 
 Le réseau public demande **deux porteurs pour chaque bloc** avant de former une chaîne. Avec Llama 3.2 3B : 4 porteurs d'un bloc, ou 2 porteurs de 2 blocs.
 
+## Les crédits pendant l'essai
+
+Chaque compte part de zéro et peut descendre à 200 crédits de découvert, une fois que sa machine a partagé un modèle quelques minutes. Un token coûte autant de crédits que le poids du modèle : 1 pour Llama 3.2 3B, 4 pour Gemma 4 12B, 10 pour Gemma 4 31B. Un compte neuf paie donc environ 200 tokens de Llama 3.2 3B, 45 de Gemma 4 12B ou 20 de Gemma 4 31B. Ce que le demandeur dépense, la tête et les porteurs le gagnent : faites tourner les rôles, et posez des questions courtes aux gros modèles.
+
 ## Le déroulé
 
 1. Les porteurs portent leurs blocs. Dans la liste des modèles, chacun voit « En blocs : N blocs sur M portés » monter.
@@ -50,7 +54,7 @@ Pour chaque machine : système, mémoire, connexion (fibre, ADSL, 4G), pays.
 ## Ce qui n'a jamais été testé
 
 - **Plus d'un PC.** Tous les essais ont tourné sur une machine, avec ses nœuds Windows et Linux. Deux machines derrière deux box différentes passent par le relais : ce chemin a été testé de bout en bout, mais avec les deux bouts sur la même connexion.
-- **Gemma 4 31B en blocs.** Il ne tient pas sur une machine de 32 Go avec tous ses porteurs. Gemma 4 12B a été testé en 3 porteurs, à 3 tokens par seconde sans carte graphique.
+- **Gemma 4 31B en blocs.** Il ne tient pas sur une machine de 32 Go avec tous ses porteurs. Gemma 4 12B a été joué en entier : trois porteurs de 2 blocs (dont un sous Linux sans Ollama, qui n'a téléchargé que 2,1 Go sur 6,9), une tête, un demandeur, puis un porteur éteint en pleine réponse. Vitesse : 3 tokens par seconde quand la machine ne fait que ça, 1 quand elle porte les six nœuds de l'essai.
 - **macOS avec un vrai modèle.** La pipeline y fait tourner le moteur, le bac à sable et un bloc de Llama 3.2 3B, pas une chaîne complète.
 - **Une semaine de fonctionnement.** Le plus long essai a duré une heure.
 
