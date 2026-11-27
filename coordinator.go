@@ -21,7 +21,6 @@ import (
 
 const (
 	pollWait        = 25 * time.Second  // how long a worker poll hangs
-	reserveWait     = 30 * time.Second  // how long a request waits for a free worker
 	reserveTTL      = 15 * time.Second  // reserved worker is released if the job never starts
 	deliverTimeout  = 20 * time.Second  // started job never picked up by its worker
 	jobTimeout      = 180 * time.Second // silence from a working worker
@@ -89,13 +88,15 @@ type job struct {
 // Coordinator matches requests to workers and keeps the credit ledger.
 // It relays ciphertext only: prompts and answers are encrypted between requester and worker.
 type Coordinator struct {
-	Catalog     []Model
-	CanaryEvery time.Duration // one rewarded canary per IP per period
-	Tick        time.Duration
-	TrustProxy  bool          // read the client IP from X-Forwarded-For
-	CoolDown    time.Duration // how long a machine that failed a job is passed over
-	RateBurst   float64       // requests one address may send at once
-	RatePerSec  float64       // and how many more each second
+	Catalog      []Model
+	CanaryEvery  time.Duration // one rewarded canary per IP per period
+	Tick         time.Duration
+	TrustProxy   bool          // read the client IP from X-Forwarded-For
+	CoolDown     time.Duration // how long a machine that failed a job is passed over
+	ReserveWait  time.Duration // how long a request waits when every machine of its model is busy
+	NoWorkerWait time.Duration // how long it waits for a first machine to offer its model
+	RateBurst    float64       // requests one address may send at once
+	RatePerSec   float64       // and how many more each second
 
 	mu         sync.Mutex
 	ledger     *Ledger
@@ -105,6 +106,7 @@ type Coordinator struct {
 	lastCanary map[string]time.Time
 	jobsDone   int64
 	bytesOut   int64
+	waiting    map[string]int // per model, requests that have no machine yet
 
 	rateMu     sync.Mutex
 	rate       map[string]*bucket // every request, per address
@@ -149,19 +151,22 @@ func newCoordinator(dataDir string) (*Coordinator, error) {
 		return nil, err
 	}
 	return &Coordinator{
-		Catalog:     defaultCatalog,
-		CanaryEvery: 10 * time.Minute,
-		Tick:        5 * time.Second,
-		CoolDown:    30 * time.Second,
-		RateBurst:   300,
-		RatePerSec:  60,
-		rate:        map[string]*bucket{},
-		ledgerRate:  map[string]*bucket{},
-		ledger:      l,
-		workers:     map[string]*worker{},
-		jobs:        map[string]*job{},
-		held:        map[string]int64{},
-		lastCanary:  map[string]time.Time{},
+		Catalog:      defaultCatalog,
+		CanaryEvery:  10 * time.Minute,
+		Tick:         5 * time.Second,
+		CoolDown:     30 * time.Second,
+		ReserveWait:  30 * time.Second,
+		NoWorkerWait: 5 * time.Minute,
+		waiting:      map[string]int{},
+		RateBurst:    300,
+		RatePerSec:   60,
+		rate:         map[string]*bucket{},
+		ledgerRate:   map[string]*bucket{},
+		ledger:       l,
+		workers:      map[string]*worker{},
+		jobs:         map[string]*job{},
+		held:         map[string]int64{},
+		lastCanary:   map[string]time.Time{},
 	}, nil
 }
 
@@ -266,6 +271,9 @@ func (c *Coordinator) model(id string) *Model {
 func (c *Coordinator) networkLocked() Network {
 	n := Network{Models: slices.Clone(c.Catalog), JobsDone: c.jobsDone, TokensOut: c.bytesOut / 4, LedgerKey: c.ledger.id.Key()}
 	n.LedgerSeq, n.Circulating = c.ledger.summary()
+	for i := range n.Models {
+		n.Models[i].Waiting = c.waiting[n.Models[i].ID]
+	}
 	now := time.Now()
 	for _, w := range c.workers {
 		if !w.alive(now) || now.Before(w.bannedUntil) {
@@ -554,7 +562,18 @@ func (c *Coordinator) handleNewJob(rw http.ResponseWriter, r *http.Request, key 
 	}
 	req.MaxTokens = min(req.MaxTokens, maxTokensCap)
 
-	deadline := time.Now().Add(reserveWait)
+	// The request is counted as waiting until a machine takes it: everyone sees which models are
+	// asked for and lack machines. That is how a model nobody offers yet finds someone to offer it.
+	c.mu.Lock()
+	c.waiting[m.ID]++
+	c.mu.Unlock()
+	defer func() {
+		c.mu.Lock()
+		c.waiting[m.ID]--
+		c.mu.Unlock()
+	}()
+	start := time.Now()
+	var busySince time.Time // since when machines exist for this model but all are busy
 	for {
 		c.mu.Lock()
 		if c.accountLocked(key).Spendable < m.Weight {
@@ -570,11 +589,16 @@ func (c *Coordinator) handleNewJob(rw http.ResponseWriter, r *http.Request, key 
 			return
 		}
 		c.mu.Unlock()
-		if !any {
-			httpErr(rw, 503, "no_worker", "no node serves this model right now")
-			return
-		}
-		if time.Now().After(deadline) {
+		switch {
+		case !any:
+			busySince = time.Time{}
+			if time.Since(start) > c.NoWorkerWait {
+				httpErr(rw, 503, "no_worker", "no machine offered this model in time")
+				return
+			}
+		case busySince.IsZero():
+			busySince = time.Now()
+		case time.Since(busySince) > c.ReserveWait:
 			httpErr(rw, 503, "busy", "all nodes are busy, try again")
 			return
 		}

@@ -79,7 +79,7 @@ func TestNetwork(t *testing.T) {
 		t.Fatal(err)
 	}
 	c.Tick, c.CanaryEvery = 20*time.Millisecond, 60*time.Millisecond
-	c.Catalog = []Model{{ID: "big", Name: "Big", Weight: 3}, {ID: "small", Name: "Small", Weight: 1}}
+	c.Catalog = []Model{{ID: "big", Name: "Big", Weight: 3}, {ID: "small", Name: "Small", Weight: 1}, {ID: "late", Name: "Late", Weight: 1}}
 	ctx, cancel := context.WithCancel(context.Background())
 	go c.Run(ctx)
 	srv := httptest.NewServer(c.Handler())
@@ -259,6 +259,23 @@ func TestNetwork(t *testing.T) {
 	}
 	if _, err := auditChain(bytes.NewReader(raw), key, 6, Checkpoint{}); err != errIncomplete {
 		t.Fatalf("short download: audit said %v, want errIncomplete", err)
+	}
+
+	// A request for a model nobody offers waits, is shown as waiting, and is answered when a machine arrives.
+	lateDone := make(chan error, 1)
+	var late strings.Builder
+	go func() {
+		_, _, err := user.chat(ctx, "late", ask("better late", 0), func(d string) { late.WriteString(d) })
+		lateDone <- err
+	}()
+	waitFor(t, "the request to be counted as waiting", func() bool {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		return c.networkLocked().Models[2].Waiting == 1
+	})
+	go testNode(t, srv.URL, ollama, "late").workLoop(ctx)
+	if err := <-lateDone; err != nil || late.String() != "better late " {
+		t.Fatalf("waiting request: err=%v answer=%q", err, late.String())
 	}
 
 	// The user stops sharing its only model and deletes it: the files go, and the machine leaves the

@@ -120,6 +120,18 @@
   .blockRow .chip { width: 12px; height: 12px; border-radius: 3px; align-self: center; }
   .blockRow .where { overflow-wrap: anywhere; font-weight: 600; }
   .blockRow .what2 { color: var(--soft); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .mine { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+  .mine .name { font: 700 19px/1.2 var(--display); }
+  .mine .note { margin: 3px 0 0; }
+  .linkish { display: block; }
+  .pickRow { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+  .pickRow .name { font: 700 18px/1.2 var(--display); }
+  .pickRow .note { margin: 2px 0 0; }
+  .pickRow button { border-radius: 999px; padding: 6px 14px; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); font-weight: 600; cursor: pointer; }
+  .pickRow button:disabled { background: none; color: var(--soft); border-color: var(--line); cursor: default; }
+  .model .info { padding-right: 0; min-height: 0; }
+  .model .info.wait { color: var(--debt); margin-top: 2px; }
+  #pickDlg { width: 460px; }
   .linkish { background: none; border: 0; padding: 0; color: var(--accent); font-size: 13px; font-weight: 600; cursor: pointer; text-align: left; margin-top: 10px; }
   #splitDlg p { font-size: 14px; margin: 0 0 12px; }
   #splitDlg label { display: block; margin: 0 0 12px; cursor: default; }
@@ -177,9 +189,14 @@
   </section>
 
   <section>
-    <h2 data-t="models"></h2>
-    <div id="models"></div>
+    <h2 data-t="mineTitle"></h2>
+    <div class="mine">
+      <div class="name" id="mineName"></div>
+      <div class="note" id="mineInfo"></div>
+    </div>
+    <button type="button" class="linkish" id="mineChange"></button>
     <button type="button" class="linkish" id="splitOpen" data-t="splitOpen"></button>
+    <button type="button" class="linkish" id="mineStop"></button>
   </section>
 
   <section id="splitBox" hidden>
@@ -188,6 +205,11 @@
     <div class="blocksBar" id="splitBar"></div>
     <div id="splitRows"></div>
     <button type="button" class="linkish" id="splitStop" data-t="splitStop"></button>
+  </section>
+
+  <section>
+    <h2 data-t="useTitle"></h2>
+    <div id="models"></div>
   </section>
 
   <section id="netBox">
@@ -235,6 +257,13 @@
   </div>
 </dialog>
 
+<dialog id="pickDlg" aria-labelledby="pTitle">
+  <h3 id="pTitle" data-t="pickTitle"></h3>
+  <p class="note" data-t="pickWhy" style="margin:0 0 14px"></p>
+  <div id="pickList"></div>
+  <div class="acts" style="margin-top:18px"><button type="button" id="pNo" data-t="cancel"></button></div>
+</dialog>
+
 <dialog id="splitDlg" aria-labelledby="sTitle">
   <h3 id="sTitle" data-t="splitAsk"></h3>
   <p data-t="split1"></p>
@@ -270,6 +299,16 @@ const FR = {
   online: "en ligne", mine: "Sur ta machine, gratuit", tokenForYou: "token avec ton solde", tokensForYou: "tokens avec ton solde", noOne: "personne",
   verified: "vérifié", entry: "écriture", entries: "écritures", checking: "vérification…",
   free: "Calculé sur ta machine, gratuit", cost: "crédits",
+  mineTitle: "Ta machine partage", useTitle: "Utiliser un modèle", mineNone: "Rien pour l'instant",
+  mineNoneWhy: "Choisis un modèle à partager pour gagner des crédits.",
+  mineWhole: "En entier sur ta machine : 1 bloc sur 1.",
+  mineSplit: "Réparti en", mineHere: "sur ta machine. Elle tient la conversation et reçoit le paiement.",
+  mineChange: "Changer de modèle partagé…", mineChoose: "Choisir un modèle à partager…", mineStop: "Ne plus partager ce modèle…",
+  pickTitle: "Quel modèle partager ?", pickWhy: "Ta machine partage un seul modèle à la fois. Ce choix ne change pas le modèle que tu utilises pour discuter.",
+  capFast: "Rapide sur ta machine", capSlow: "Lent : tourne sur le processeur", capNo: "Trop gros pour ta machine seule",
+  noOneYet: "Personne ne le porte : ta demande attendra une machine.",
+  waitingOne: "demande en attente d'une machine", waitingMany: "demandes en attente d'une machine",
+  waitNone: "Demande en attente : il manque une machine pour charger ce modèle. Elle partira dès qu'une machine le propose. Tu peux arrêter quand tu veux.",
   share: "Partager", choose: "Choisir", shared: "Partagé ✓", unshare: "Ne plus partager", tooSmall: "Trop gros", cancel: "Annuler",
   switchTo: "Passer à", busyOne: "occupée", busyMany: "occupées",
   cReplace: "Ta machine partage un seul modèle à la fois. Elle arrête de proposer :",
@@ -329,6 +368,16 @@ const EN = {
   online: "online", mine: "On your machine, free", tokenForYou: "token with your balance", tokensForYou: "tokens with your balance", noOne: "no one",
   verified: "verified", entry: "entry", entries: "entries", checking: "checking…",
   free: "Computed on your machine, free", cost: "credits",
+  mineTitle: "Your machine shares", useTitle: "Use a model", mineNone: "Nothing yet",
+  mineNoneWhy: "Choose a model to share and earn credits.",
+  mineWhole: "Whole on your machine: 1 block out of 1.",
+  mineSplit: "Split in", mineHere: "on your machine. It holds the conversation and is paid.",
+  mineChange: "Change the shared model…", mineChoose: "Choose a model to share…", mineStop: "Stop sharing this model…",
+  pickTitle: "Which model to share?", pickWhy: "Your machine shares one model at a time. This choice does not change the model you chat with.",
+  capFast: "Fast on your machine", capSlow: "Slow: runs on the processor", capNo: "Too big for your machine alone",
+  noOneYet: "No one holds it: your request will wait for a machine.",
+  waitingOne: "request waiting for a machine", waitingMany: "requests waiting for a machine",
+  waitNone: "Request waiting: a machine is missing to load this model. It will leave as soon as a machine offers it. You can stop whenever you want.",
   share: "Share", choose: "Choose", shared: "Shared ✓", unshare: "Stop sharing", tooSmall: "Too big", cancel: "Cancel",
   switchTo: "Switch to", busyOne: "busy", busyMany: "busy",
   cReplace: "Your machine shares one model at a time. It stops offering:",
@@ -463,6 +512,7 @@ function paint(s) {
   $("ver").textContent = `${T.version} ${s.version}`;
   offerUpdate(s);
   paintSplit(s);
+  paintMine(s);
 
   $("nNodes").textContent = net ? num(net.workers) : "–";
   $("nJobs").textContent = net ? num(net.jobs_done) : "–";
@@ -484,36 +534,67 @@ function paint(s) {
   sel.value = picked && keep ? keep : (usable ? usable.id : net.models[0]?.id);
 
   $("models").replaceChildren(...net.models.map(m => {
-    const hosted = mine.includes(m.id), cap = (s.capacity || {})[m.id];
-    const pull = s.pull && s.pull.model === m.id ? s.pull : null;
     const row = el("div", "model");
     row.dataset.id = m.id;
-
-    // Left: choose this model for the conversation.
     const pick = el("button", "pick");
     pick.type = "button";
     const top = el("span", "top"), title = el("span");
     title.append(el("span", "name", m.name), el("span", "price", `×${m.weight}`));
     const online = !m.workers ? T.noOne : `${num(m.workers)} ${T.online}` + (m.busy ? `, ${num(m.busy)} ${m.busy > 1 ? T.busyMany : T.busyOne}` : "");
     top.append(title, el("span", "count" + (m.workers ? "" : " none"), online));
-    const info = pull ? (pull.error || `${T.downloading} ${Math.floor(pull.pct)} %`) : hosted ? T.mine
-      : !m.workers ? T.waiting
+    const info = mine.includes(m.id) ? T.mine : !m.workers ? T.noOneYet
       : `≈ ${count(Math.floor(can / m.weight), T.tokenForYou, T.tokensForYou)}`;
-    pick.append(top, el("span", "info" + (pull && pull.error ? " bad" : ""), info));
+    pick.append(top, el("span", "info", info));
+    if (m.waiting) pick.append(el("span", "info wait", count(m.waiting, T.waitingOne, T.waitingMany)));
     pick.onclick = () => { sel.value = m.id; picked = true; markModel(); };
-
-    // Right: offer this model from this machine. Always confirmed first.
-    const downloading = pull && !pull.error;
-    const share = el("button", "share" + (hosted ? " on" : ""),
-      hosted ? T.shared : downloading ? T.cancel : cap === "no" ? T.tooSmall : mine.length ? T.choose : T.share);
-    share.type = "button";
-    share.disabled = s.phase !== "ready" || (!hosted && !downloading && cap === "no");
-    share.onclick = () => downloading ? askCancel(m) : askShare(m, !hosted, cap);
-    row.append(pick, share);
+    row.append(pick);
     return row;
   }));
   markModel();
 }
+
+// What this machine lends, apart from what its user chats with.
+function paintMine(s) {
+  const models = (s.network && s.network.models) || [], hosted = s.phase === "ready" ? (s.hosted || []) : [];
+  const m = models.find(x => hosted.includes(x.id)), sp = s.split;
+  const pull = s.pull && !s.pull.error ? s.pull : null;
+  $("mineName").textContent = m ? `${m.name} ×${m.weight}` : T.mineNone;
+  let info = m ? T.mineWhole : T.mineNoneWhy;
+  if (m && sp && sp.state === "ready" && sp.model === m.id) {
+    // A block is on this machine when its server runs here.
+    const here = sp.blocks.filter(b => /^(127\.|localhost|\[?::1|this machine)/.test(b.machine)).length;
+    info = `${T.mineSplit} ${count(sp.blocks.length, T.blockOne, T.blockMany)}, ${here} ${T.mineHere}`;
+  }
+  if (pull) info = `${T.downloading} ${pull.model} ${Math.floor(pull.pct)} %`;
+  else if (s.pull && s.pull.error) info = s.pull.error;
+  $("mineInfo").textContent = info;
+  const ready = s.phase === "ready";
+  $("mineChange").hidden = !ready || !!pull;
+  $("mineChange").textContent = m ? T.mineChange : T.mineChoose;
+  $("mineStop").hidden = !ready || (!m && !pull);
+  $("mineStop").textContent = pull ? `${T.cancelDl}…` : T.mineStop;
+  $("mineStop").onclick = () => {
+    const target = pull ? models.find(x => x.id === pull.model) : m;
+    if (target) pull ? askCancel(target) : askShare(target, false);
+  };
+}
+
+$("mineChange").addEventListener("click", () => {
+  const models = (last && last.network && last.network.models) || [], hosted = (last && last.hosted) || [];
+  $("pickList").replaceChildren(...models.map(m => {
+    const cap = ((last && last.capacity) || {})[m.id], row = el("div", "pickRow"), text = el("div");
+    text.append(el("div", "name", `${m.name} ×${m.weight}`),
+      el("div", "note", `${m.size_gb} Go. ${cap === "no" ? T.capNo : cap === "slow" ? T.capSlow : T.capFast}`));
+    const go = el("button", "", hosted.includes(m.id) ? T.shared : T.choose);
+    go.type = "button";
+    go.disabled = hosted.includes(m.id) || cap === "no";
+    go.onclick = () => { $("pickDlg").close(); askShare(m, true, cap); };
+    row.append(text, go);
+    return row;
+  }));
+  $("pickDlg").showModal();
+});
+$("pNo").addEventListener("click", () => $("pickDlg").close());
 
 // The split, as the engine reported it: which machine holds which layers.
 const blockColours = ["var(--s-idle)", "var(--s-work)", "var(--s-setup)", "var(--accent)", "var(--debt)", "var(--s-paused)"];
@@ -680,7 +761,8 @@ $("input").addEventListener("keydown", e => {
 function waitText() {
   const id = $("model").value, m = ((last && last.network && last.network.models) || []).find(x => x.id === id);
   if (last && last.phase === "ready" && (last.hosted || []).includes(id)) return T.waitLocal;
-  if (!m || !m.workers) return "…";
+  if (!m) return "…";
+  if (!m.workers) return T.waitNone;
   return m.busy >= m.workers ? `${T.waitBusy} ${num(m.workers)}. ${T.waitBusy2}` : `${T.waitRun} ${num(m.workers)}. ${T.waitRun2}`;
 }
 

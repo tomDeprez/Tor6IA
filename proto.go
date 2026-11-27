@@ -38,7 +38,8 @@ type Model struct {
 	MinVRAMMB int     `json:"min_vram_mb"`
 	SizeGB    float64 `json:"size_gb"`
 	Workers   int     `json:"workers"`
-	Busy      int     `json:"busy"` // machines of this model that are computing right now
+	Busy      int     `json:"busy"`    // machines of this model that are computing right now
+	Waiting   int     `json:"waiting"` // requests waiting for a machine of this model
 }
 
 type Message struct {

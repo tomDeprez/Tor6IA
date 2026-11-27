@@ -2,6 +2,20 @@
 
 Each `## vX.Y.Z` section becomes the notes of that release, and the text of the update window in the program.
 
+## v0.2.1
+
+**Français**
+- L'interface sépare « Ta machine partage » et « Utiliser un modèle » : partager un modèle et discuter avec un autre sont deux choix distincts.
+- Le modèle partagé indique ses blocs : en entier sur ta machine, ou réparti en plusieurs blocs.
+- Tu peux demander un modèle que personne ne porte encore : la demande attend, l'interface dit qu'il manque une machine, et elle part dès qu'une machine le propose.
+- Chaque modèle affiche les demandes en attente : on voit quels modèles manquent de machines.
+
+**English**
+- The interface separates "Your machine shares" from "Use a model": sharing a model and chatting with another are two distinct choices.
+- The shared model shows its blocks: whole on your machine, or split in several blocks.
+- You can ask for a model nobody holds yet: the request waits, the interface says a machine is missing, and it leaves as soon as a machine offers it.
+- Each model shows the requests that wait: everyone sees which models lack machines.
+
 ## v0.2.0
 
 **Français**
