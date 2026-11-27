@@ -127,11 +127,15 @@ The list of models shows it as it happens: "In blocks: 4 blocks of 6 held", then
 
 The relay carries what the machines exchange when they cannot reach each other directly. It sees who talks to whom and how much, never what: the link between two machines is encrypted from end to end. Two machines of the same network talk directly, without the relay.
 
-What to know before holding blocks or conversations for strangers:
+**Everyone in a chain is paid.** The credits of an answer are shared: two parts in ten to the machine that holds the conversation, eight to the holders, each according to the blocks it has in the chain. The account that asks signs that list before the job starts, so the coordinator cannot send a part to anyone else, and the shares are written in the public ledger. `tor6ia audit` checks them like the rest.
 
-- The machines of a chain see the numbers of the computation pass, not the text. The machine that holds the conversation sees the text, as any machine that answers does.
-- For now the payment of an answer goes to the machine that holds the conversation. Sharing it between the holders, each according to its blocks, is the next step.
-- The coordinator gives a holder's line to the machine it chose to hold the conversations. A line lets that machine use the blocks. Measured on one laptop, Gemma 4 12B split in two answers at 3.3 tokens per second, and still 1.9 with 50 ms of network delay each way.
+**A machine that computes wrong is found and left out.** The coordinator sends test jobs with a known answer. When one fails through a chain, it replaces one holder at a time and tests again. A holder is excluded for a day when the chain fails with it, passes without it, and fails again when it is put back: two tests must agree, because a test can fail by bad luck. Measured: a holder that answers noise is out after 4 tests, about a minute.
+
+What to know before using or holding a model in blocks:
+
+- The machines of a chain see the numbers of the computation pass, not the text. An expert could draw part of the meaning from them. The machine that holds the conversation sees the text, as any machine that answers does. The interface says so before you ask.
+- The coordinator gives a holder's line to the machine it chose to hold the conversations. A line lets that machine use the blocks.
+- A holder that computes wrong can only be told from the others when another machine holds the same blocks. Measured on one laptop, Gemma 4 12B split in two answers at 3.3 tokens per second, and still 1.9 with 50 ms of network delay each way.
 
 ## Credits
 
@@ -234,7 +238,7 @@ Automatic deploy gives GitHub Actions root access to the server. Use a dedicated
 
 ## Known limits
 
-- **Models in blocks are young.** The network forms the chains, but the payment of an answer still goes to the machine that holds the conversation, not to the holders of its blocks, and nothing yet detects a holder that computes wrong. A machine that holds conversations may use the blocks it was given outside the network.
+- **Models in blocks are young.** They were tested on a few machines of the same owner, not yet by strangers. A machine that holds conversations may use the blocks it was given outside the network, unpaid.
 - **The machine that computes reads your prompt.** It does not know who you are, but do not send secrets.
 - **The coordinator is still trusted for three things.** It assigns machines: the encryption key is signed by the account that is paid, so it cannot read a job sent to someone else's machine, but it could send your job to a machine it runs itself. It counts answer bytes: your node recounts what it pays, not yet what it earns. It grants overdrafts: it could grant them to fake accounts, but each is capped at 200 and visible in the ledger.
 - **An account can leave with its debt.** The 200 overdraft is the entry cost of the network. The per-IP test limits it; several addresses get around it.
@@ -265,7 +269,8 @@ No dependency outside the Go standard library.
 | `split.go` | a model across a group of machines, with the Tor6IA engine |
 | `hold.go` | the blocks this machine holds for a group |
 | `head.go` | this machine as the head of a chain the network formed |
-| `chain.go` | the coordinator's register of blocks, and how it forms chains |
+| `chain.go` | the coordinator's register of blocks, how it forms chains and shares a payment |
+| `chaintest.go` | how the coordinator finds a machine of a chain that computes wrong |
 | `ui/index.html` | interface |
 | `deploy.ps1`, `deploy/remote.sh` | coordinator deployment |
 

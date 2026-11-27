@@ -91,17 +91,30 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 40
+    timeout-minutes: 50
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - name: Install with the documented script
-        run: T6_NO_START=1 sh install.sh
+        if: runner.os != 'Windows'
+        run: |
+          T6_NO_START=1 sh install.sh
+          echo "TOR6IA=$HOME/.local/bin/tor6ia" >> "$GITHUB_ENV"
+      - name: Download the Windows program
+        if: runner.os == 'Windows'
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          curl -fL -o tor6ia.exe "https://github.com/${{ github.repository }}/releases/download/$TAG/tor6ia-windows-amd64.exe"
+          echo "TOR6IA=./tor6ia.exe" >> "$GITHUB_ENV"
       - name: Start alone and wait until the machine has passed its test job
         run: |
           # --coordinator "" is solo mode: the test must not add accounts to the public ledger.
-          "$HOME/.local/bin/tor6ia" start --no-browser --coordinator "" > node.log 2>&1 &
+          "$TOR6IA" start --no-browser --coordinator "" > node.log 2>&1 &
           for _ in $(seq 1 360); do
             status=$(curl -fs http://127.0.0.1:7606/api/status || true)
             case "$status" in
@@ -119,3 +132,20 @@ jobs:
           curl -fs -m 600 http://127.0.0.1:7606/v1/chat/completions -H 'Content-Type: application/json' \
             -d "{\"model\":\"$model\",\"max_tokens\":20,\"messages\":[{\"role\":\"user\",\"content\":\"Say hello.\"}]}" | tee answer.json
           grep -q '"content":"..' answer.json
+      - name: Hold one block of a model, downloaded alone and served locked in
+        run: |
+          # The plan is read from the model's header, then one block of Llama 3.2 3B is downloaded,
+          # not the model: the engine, llama.cpp and the lock all run for real on this system.
+          curl -fs -m 300 "http://127.0.0.1:7606/api/plan?model=llama3.2:3b" | tee plan.json
+          grep -q '"advised_blocks"' plan.json
+          curl -fs -X POST http://127.0.0.1:7606/api/hold -H 'Content-Type: application/json' -d '{"on":true,"model":"llama3.2:3b","first":2,"last":2}'
+          for _ in $(seq 1 180); do
+            status=$(curl -fs http://127.0.0.1:7606/api/status || true)
+            case "$status" in
+              *'"hold":{"model":"llama3.2:3b","first":2,"last":2,"of":2,"state":"ready"'*) echo; echo "block 2 of 2 held"; break ;;
+              *'"hold":{'*'"state":"error"'*) echo "$status"; cat node.log; exit 1 ;;
+            esac
+            sleep 5
+          done
+          echo "$status" | grep -q '"state":"ready","pct":100,"announce":"[^"]*=2-2#'
+          curl -fs -X POST http://127.0.0.1:7606/api/hold -H 'Content-Type: application/json' -d '{"on":false}'

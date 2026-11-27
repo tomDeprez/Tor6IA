@@ -2,6 +2,24 @@
 
 Each `## vX.Y.Z` section becomes the notes of that release, and the text of the update window in the program.
 
+## v0.5.0
+
+**Français**
+- Toute la chaîne est payée. Une réponse d'un modèle en blocs paie la machine qui tient la conversation (2 parts sur 10) et les porteurs (8 parts, selon leurs blocs). Le demandeur signe cette liste, le registre public la contient, `tor6ia audit` la vérifie.
+- Une machine qui calcule faux est trouvée et exclue pour un jour : le coordinateur remplace un porteur à la fois et refait le test. Un porteur qui renvoie du bruit est dehors en 4 tests, environ une minute.
+- Avant une question à un modèle en blocs, l'interface dit ce que voient les machines de la chaîne.
+- Charger un modèle en blocs n'envoie plus un cinquième du modèle sur le réseau : 2 Mo au lieu de 411 Mo pour Llama 3.2 3B à travers le relais.
+- Corrigé : dans la version 0.4.0, le bouton « Tenir ces conversations » ne répondait pas, et valider une autre fenêtre pouvait envoyer cette demande à sa place.
+- Le registre contient un nouveau genre de paiement : les versions d'avant ne savent pas le vérifier et afficheront une alerte. Mets à jour.
+
+**English**
+- Everyone in a chain is paid. An answer from a model in blocks pays the machine that holds the conversation (2 parts in 10) and the holders (8 parts, by their blocks). The requester signs that list, the public ledger holds it, `tor6ia audit` checks it.
+- A machine that computes wrong is found and excluded for a day: the coordinator replaces one holder at a time and tests again. A holder that answers noise is out in 4 tests, about a minute.
+- Before a question to a model in blocks, the interface says what the machines of the chain see.
+- Loading a model in blocks no longer sends a fifth of the model over the network: 2 MB instead of 411 MB for Llama 3.2 3B through the relay.
+- Fixed: in version 0.4.0 the button "Hold these conversations" did not answer, and confirming another window could send that request in its place.
+- The ledger holds a new kind of payment: earlier versions cannot verify it and will show an alert. Update.
+
 ## v0.4.0
 
 **Français**

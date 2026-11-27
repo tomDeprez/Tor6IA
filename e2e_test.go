@@ -226,15 +226,15 @@ func TestNetwork(t *testing.T) {
 	// The ledger refuses what the rules forbid, even when the coordinator itself asks.
 	wk, uk := worker.id.Key(), user.id.Key()
 	sign := func(job string, max int64) []byte {
-		return ed25519.Sign(user.id.priv, payAuthMessage(job, wk, "big", max))
+		return ed25519.Sign(user.id.priv, payAuthMessage(job, wk, "big", max, nil))
 	}
-	if err := c.ledger.pay(uk, wk, 50, 50, "big", "forged", []byte("not a signature")); err == nil {
+	if err := c.ledger.pay(uk, wk, 50, 50, "big", "forged", []byte("not a signature"), nil); err == nil {
 		t.Fatal("payment without the payer's signature was accepted")
 	}
-	if err := c.ledger.pay(uk, wk, 60, 50, "big", "above", sign("above", 50)); err == nil {
+	if err := c.ledger.pay(uk, wk, 60, 50, "big", "above", sign("above", 50), nil); err == nil {
 		t.Fatal("payment above the signed ceiling was accepted")
 	}
-	if err := c.ledger.pay(uk, wk, 1000, 1000, "big", "deep", sign("deep", 1000)); err == nil {
+	if err := c.ledger.pay(uk, wk, 1000, 1000, "big", "deep", sign("deep", 1000), nil); err == nil {
 		t.Fatal("payment beyond the overdraft was accepted")
 	}
 

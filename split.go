@@ -31,14 +31,14 @@ import (
 // That is why the user names them himself, and why the network cannot yet form groups of strangers.
 
 // engineRelease is the engine version this program drives, with the checksum of each build.
-const engineRelease = "v0.2.4"
+const engineRelease = "v0.2.6"
 
 var engineBuilds = map[string]string{
-	"windows/amd64": "3e75239d3692837cd827eef9cd98de950c3d92e9a594ef9514fcb0ed7352d357",
-	"linux/amd64":   "8c7f978e55882f8e53dbef8b59125f69815058c75df6dd46079079f3cc05a2de",
-	"linux/arm64":   "fc264d7cb1c140f007f7ea77520ed318197ad1f8a797895ee81ae230a9fbfb43",
-	"darwin/amd64":  "28c60e2f7c2acd7c5d7cddf099ff2d58b961dff9d4909aecb6e359d0b394c985",
-	"darwin/arm64":  "6900c118e44d4f48b5378edd216776df41702e17f3fbe2678ec8eb8c6186a0f0",
+	"windows/amd64": "f5c0486f86aaee0b8223f5404985bee84cadb4fa6c1b260bf4ddb8a86bc5c772",
+	"linux/amd64":   "5edc7b41b1890422866af93ea984f91005050ea71183bff94070759dbc6eaf2b",
+	"linux/arm64":   "fae3ec73dcafac80bed74bb5c30383a64a57160d20b6f01e8eb713f32a1ad18e",
+	"darwin/amd64":  "d03897c64ecaae47de1657ca4ca2896be4acfd74c277834a0b8539d4a11eb3a3",
+	"darwin/arm64":  "00be586d0827a7852e72c1713a3c0105c91a73a5e55c7bfce1f26f7c5b928f04",
 }
 
 type SplitBlock struct {
@@ -250,7 +250,9 @@ func (n *Node) startSplit(cfg splitConfig) {
 	n.engineURL, n.stopEngine = "", nil
 	n.split = &SplitStatus{Model: cfg.Model, State: "error", Machines: cfg.Machines,
 		Error: "a machine of the group left: the model is no longer split"}
-	alone := slices.ContainsFunc(n.catalog, func(m Model) bool { return m.ID == cfg.Model && n.capacity(m) != "no" })
+	// A head answers through its chain or not at all: answering alone would have the holders paid
+	// for nothing, and would hide a chain that no longer works.
+	alone := n.head == nil && slices.ContainsFunc(n.catalog, func(m Model) bool { return m.ID == cfg.Model && n.capacity(m) != "no" })
 	if !alone {
 		n.models = nil
 	}
@@ -275,7 +277,7 @@ func (n *Node) stopSplit() {
 	}
 	n.splitRun++ // a load in progress has nothing more to say
 	n.engineURL, n.stopEngine, n.split = "", nil, nil
-	alone := slices.ContainsFunc(n.catalog, func(m Model) bool { return m.ID == model && n.capacity(m) != "no" })
+	alone := n.head == nil && slices.ContainsFunc(n.catalog, func(m Model) bool { return m.ID == model && n.capacity(m) != "no" })
 	left := false
 	if !alone && slices.Contains(n.models, model) {
 		n.models = nil

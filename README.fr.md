@@ -127,11 +127,15 @@ La liste des modèles le montre en direct : « En blocs : 4 blocs sur 6 portés 
 
 Le relais fait passer ce que les machines échangent quand elles ne peuvent pas se joindre directement. Il voit qui parle à qui et combien, jamais quoi : le lien entre deux machines est chiffré de bout en bout. Deux machines du même réseau se parlent directement, sans le relais.
 
-À savoir avant de porter des blocs ou des conversations pour des inconnus :
+**Toute la chaîne est payée.** Les crédits d'une réponse sont partagés : deux parts sur dix à la machine qui tient la conversation, huit aux porteurs, chacun selon les blocs qu'il a dans la chaîne. Le compte qui demande signe cette liste avant le début du travail, donc le coordinateur ne peut envoyer une part à personne d'autre, et les parts sont écrites dans le registre public. `tor6ia audit` les vérifie comme le reste.
 
-- Les machines d'une chaîne voient passer les nombres du calcul, pas le texte. La machine qui tient la conversation voit le texte, comme toute machine qui répond.
-- Pour l'instant le paiement d'une réponse va à la machine qui tient la conversation. Le partager entre les porteurs, chacun selon ses blocs, est la prochaine étape.
-- Le coordinateur donne la ligne d'un porteur à la machine qu'il a choisie pour tenir les conversations. Une ligne permet à cette machine d'utiliser les blocs. Mesuré sur un portable, Gemma 4 12B coupé en deux répond à 3,3 tokens par seconde, et encore 1,9 avec 50 ms de délai réseau dans chaque sens.
+**Une machine qui calcule faux est trouvée et écartée.** Le coordinateur envoie des tests dont il connaît la réponse. Quand un test échoue à travers une chaîne, il remplace un porteur à la fois et recommence. Un porteur est exclu pour un jour quand la chaîne échoue avec lui, réussit sans lui, puis échoue encore quand on le remet : deux tests doivent concorder, parce qu'un test peut échouer par malchance. Mesuré : un porteur qui renvoie du bruit est dehors après 4 tests, environ une minute.
+
+À savoir avant d'utiliser ou de porter un modèle en blocs :
+
+- Les machines d'une chaîne voient passer les nombres du calcul, pas le texte. Un expert pourrait en tirer une partie du sens. La machine qui tient la conversation voit le texte, comme toute machine qui répond. L'interface le dit avant que tu poses ta question.
+- Le coordinateur donne la ligne d'un porteur à la machine qu'il a choisie pour tenir les conversations. Une ligne permet à cette machine d'utiliser les blocs.
+- Un porteur qui calcule faux ne peut être distingué des autres que si une autre machine porte les mêmes blocs. Mesuré sur un portable, Gemma 4 12B coupé en deux répond à 3,3 tokens par seconde, et encore 1,9 avec 50 ms de délai réseau dans chaque sens.
 
 ## Les crédits
 
@@ -237,7 +241,7 @@ Les nœuds ne reçoivent aucune connexion entrante : ils interrogent le coordina
 
 ## Limites connues
 
-- **Les modèles en blocs sont jeunes.** Le réseau forme les chaînes, mais le paiement d'une réponse va encore à la machine qui tient la conversation, pas aux porteurs de ses blocs, et rien ne détecte encore un porteur qui calcule faux. Une machine qui tient des conversations peut utiliser hors du réseau les blocs qu'on lui a donnés.
+- **Les modèles en blocs sont jeunes.** Ils ont été testés sur quelques machines du même propriétaire, pas encore par des inconnus. Une machine qui tient des conversations peut utiliser hors du réseau, sans payer, les blocs qu'on lui a donnés.
 - **La machine qui calcule lit ta question.** Elle ne sait pas de qui elle vient, mais n'envoie rien de secret.
 - **Le coordinateur reste un point de confiance pour trois choses.** Il attribue les machines : la clé de chiffrement est signée par le compte payé, donc il ne peut pas lire un job envoyé à la machine de quelqu'un d'autre, mais il pourrait envoyer ton job à une machine qu'il fait tourner lui-même. Il compte les octets des réponses : ton nœud recompte ce qu'il paie, pas encore ce qu'il gagne. Il accorde les découverts : il pourrait en accorder à de faux comptes, mais chacun est plafonné à 200 et visible dans le registre.
 - **Un compte peut partir avec sa dette.** Le découvert de 200 est le coût d'entrée du réseau. Le test par adresse IP le limite, plusieurs adresses le contournent.
@@ -268,7 +272,8 @@ Aucune dépendance hors de la bibliothèque standard de Go.
 | `split.go` | un modèle réparti sur un groupe de machines, avec le moteur Tor6IA |
 | `hold.go` | les blocs que cette machine porte pour un groupe |
 | `head.go` | cette machine en tête d'une chaîne formée par le réseau |
-| `chain.go` | le registre des blocs du coordinateur, et la formation des chaînes |
+| `chain.go` | le registre des blocs du coordinateur, la formation des chaînes et le partage d'un paiement |
+| `chaintest.go` | comment le coordinateur trouve une machine d'une chaîne qui calcule faux |
 | `ui/index.html` | interface |
 | `deploy.ps1`, `deploy/remote.sh` | déploiement du coordinateur |
 

@@ -74,8 +74,10 @@ type job struct {
 	inBytes   int64
 	outBytes  int64
 	hold      int64
-	max       int64  // ceiling signed by the requester
-	auth      []byte // that signature, written to the ledger with the payment
+	max       int64   // ceiling signed by the requester
+	auth      []byte  // that signature, written to the ledger with the payment
+	shares    []Share // who is paid, when a chain answers
+	links     []link  // a test job: the chain it goes through, when the head has it loaded
 	nextSeq   uint64
 	chunks    chan Chunk
 	created   time.Time
@@ -116,6 +118,9 @@ type Coordinator struct {
 	planTried       map[string]time.Time
 	blockNodes      map[string]*blockNode // machines that hold blocks or offer to be a head
 	chains          map[string]*group     // per model
+	tests           map[string]*chainTest // per model: what the last test jobs through its chain said
+	doubts          map[string]int        // per machine: times a chain failed with it and passed without
+	excluded        map[string]time.Time  // machines that computed wrong, and until when they are left out
 
 	rateMu     sync.Mutex
 	rate       map[string]*bucket // every request, per address
@@ -183,6 +188,9 @@ func newCoordinator(dataDir string) (*Coordinator, error) {
 		planTried:       map[string]time.Time{},
 		blockNodes:      map[string]*blockNode{},
 		chains:          map[string]*group{},
+		tests:           map[string]*chainTest{},
+		doubts:          map[string]int{},
+		excluded:        map[string]time.Time{},
 	}, nil
 }
 
@@ -526,7 +534,7 @@ func (c *Coordinator) finishLocked(j *job, errMsg string, last Chunk) {
 		}
 		if j.outBytes > 0 {
 			final.Cost = price(j.weight, j.inBytes, j.outBytes)
-			if err := c.ledger.pay(j.requester, w.key, final.Cost, j.max, j.model, j.id, j.auth); err != nil {
+			if err := c.ledger.pay(j.requester, w.key, final.Cost, j.max, j.model, j.id, j.auth, j.shares); err != nil {
 				log.Printf("ledger: job %s not settled: %v", j.id, err)
 				final.Cost = 0
 			}
@@ -553,6 +561,11 @@ func (c *Coordinator) finishLocked(j *job, errMsg string, last Chunk) {
 func (c *Coordinator) newJobLocked(m *Model, w *worker, requester string, maxTokens int64) *job {
 	j := &job{id: randHex(12), model: m.ID, weight: m.Weight, requester: requester, w: w, xpub: w.xpub, xsig: w.xsig,
 		maxOut: maxTokens * 4, chunks: make(chan Chunk, 1024), created: time.Now()}
+	if requester != "" {
+		j.shares = c.sharesLocked(m.ID, w.key)
+	} else {
+		j.links = c.servedLocked(m.ID, w.key)
+	}
 	w.job = j
 	c.jobs[j.id] = j
 	return j
@@ -570,7 +583,7 @@ func (c *Coordinator) startLocked(j *job, ephPub, payload []byte) {
 func (c *Coordinator) pickLocked(model string) (best *worker, any bool) {
 	now := time.Now()
 	for _, w := range c.workers {
-		if !slices.Contains(w.models, model) || now.Before(w.bannedUntil) || !w.alive(now) {
+		if !slices.Contains(w.models, model) || now.Before(w.bannedUntil) || !w.alive(now) || !c.usableLocked(w.key, model) {
 			continue
 		}
 		any = true
@@ -621,7 +634,7 @@ func (c *Coordinator) handleNewJob(rw http.ResponseWriter, r *http.Request, key 
 		if w != nil {
 			j := c.newJobLocked(m, w, key, int64(req.MaxTokens))
 			c.mu.Unlock()
-			writeJSON(rw, 200, NewJobResp{ID: j.id, WorkerXPub: j.xpub, WorkerXSig: j.xsig, Worker: w.key, Weight: m.Weight, MaxTokens: req.MaxTokens})
+			writeJSON(rw, 200, NewJobResp{ID: j.id, WorkerXPub: j.xpub, WorkerXSig: j.xsig, Worker: w.key, Shares: j.shares, Weight: m.Weight, MaxTokens: req.MaxTokens})
 			return
 		}
 		c.mu.Unlock()
@@ -662,7 +675,7 @@ func (c *Coordinator) handleStart(rw http.ResponseWriter, r *http.Request, key s
 		httpErr(rw, 404, "unknown_job", "unknown or expired job")
 		return
 	}
-	if pub, _ := hex.DecodeString(key); !ed25519.Verify(pub, payAuthMessage(j.id, j.w.key, j.model, req.Max), req.Auth) {
+	if pub, _ := hex.DecodeString(key); !ed25519.Verify(pub, payAuthMessage(j.id, j.w.key, j.model, req.Max, j.shares), req.Auth) {
 		c.finishLocked(j, "bad payment signature", Chunk{})
 		c.mu.Unlock()
 		httpErr(rw, 400, "bad_request", "bad payment signature")
@@ -742,8 +755,9 @@ func (c *Coordinator) sweep() {
 		}
 	}
 	c.chainsLocked() // a machine that went silent leaves its chain
+	c.probeLocked()  // a chain changed to find a machine at fault is tested as soon as it is loaded
 	for _, w := range c.workers {
-		if w.job != nil || w.waiter == nil || len(w.models) == 0 || now.Before(w.bannedUntil) {
+		if w.job != nil || w.waiter == nil || len(w.models) == 0 || now.Before(w.bannedUntil) || !c.usableLocked(w.key, w.models[0]) {
 			continue
 		}
 		if _, recent := c.lastCanary[w.ip]; recent {
@@ -795,7 +809,11 @@ func (c *Coordinator) runCanary(j *job) {
 		c.finishLocked(j, "bad worker key", Chunk{})
 	}
 	w := j.w
-	if strings.Contains(strings.ToLower(out.String()), code) {
+	passed := strings.Contains(strings.ToLower(out.String()), code)
+	if j.links != nil && c.chainTestedLocked(j.model, w.key, j.links, passed) {
+		return // the job went through a chain: the machine at fault is being looked for among all of them
+	}
+	if passed {
 		w.strikes = 0
 		if !c.ledger.isVouched(w.key) { // later canaries are only spot checks
 			if err := c.ledger.vouch(w.key, j.id); err != nil {

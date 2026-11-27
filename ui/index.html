@@ -134,6 +134,7 @@
   #holdDlg input[type=number] { width: 72px; background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 7px 8px; font: inherit; }
   #holdDlg .warn { color: var(--debt); }
   #holdPlan { font-weight: 600; }
+  #chainNote { margin: 0; padding: 10px 28px; border-bottom: 1px solid var(--line); max-width: 78ch; }
   .pickRow { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
   .pickRow .name { font: 700 18px/1.2 var(--display); }
   .pickRow .note { margin: 2px 0 0; }
@@ -207,6 +208,7 @@
     <button type="button" class="linkish" id="mineChange"></button>
     <button type="button" class="linkish" id="splitOpen" data-t="splitOpen"></button>
     <button type="button" class="linkish" id="holdOpen" data-t="holdOpen"></button>
+    <p class="note" id="holdHint" style="margin:2px 0 6px"></p>
     <button type="button" class="linkish" id="headOpen" data-t="headOpen"></button>
     <button type="button" class="linkish" id="mineStop"></button>
   </section>
@@ -276,6 +278,7 @@
     <select id="model"></select>
     <button type="button" id="clear" data-t="clear"></button>
   </header>
+  <p id="chainNote" class="note" hidden></p>
   <div id="log" aria-live="polite"></div>
   <form id="form">
     <textarea id="input" rows="1"></textarea>
@@ -300,15 +303,15 @@
   <div class="acts" style="margin-top:18px"><button type="button" id="pNo" data-t="cancel"></button></div>
 </dialog>
 
-<dialog id="headDlg" aria-labelledby="cTitle">
-  <h3 id="cTitle" data-t="headAsk"></h3>
+<dialog id="headDlg" aria-labelledby="gTitle">
+  <h3 id="gTitle" data-t="headAsk"></h3>
   <p data-t="head1"></p>
-  <label><span data-t="holdModel"></span><select id="cModel"></select></label>
+  <label><span data-t="holdModel"></span><select id="gModel"></select></label>
   <p class="note" data-t="head2" style="margin:0 0 12px"></p>
-  <p class="msg err" id="cError" hidden></p>
+  <p class="msg err" id="gError" hidden></p>
   <div class="acts">
-    <button type="button" id="cNo" data-t="cancel"></button>
-    <button type="button" class="go" id="cYes" data-t="headGo"></button>
+    <button type="button" id="gNo" data-t="cancel"></button>
+    <button type="button" class="go" id="gYes" data-t="headGo"></button>
   </div>
 </dialog>
 
@@ -349,6 +352,7 @@ const FR = {
   model: "Modèle", api: "API compatible OpenAI", clear: "Effacer", send: "Envoyer", stop: "Arrêter",
   placeholder: "Écris ton message…", earned: "Gagnés", spent: "Dépensés", canSpend: "Tu peux dépenser",
   account: "Compte", version: "Version",
+  chainNote: "Ce modèle est porté en blocs par plusieurs machines. Celle qui tient la conversation lit ton message, comme toute machine qui répond. Les autres voient passer les nombres du calcul, pas le texte : un expert pourrait en tirer une partie du sens. N'envoie rien de secret.",
   emptyTitle: "Pose ta question.", emptyBody: "Ton message est chiffré de bout en bout. La machine qui répond ne sait pas qui tu es.",
   sOff: "Hors ligne", sOffWhy: "Coordinateur injoignable. Nouvel essai en cours.",
   sConnecting: "Connexion", sOllama: "Préparation", sOllamaWhy: "Démarrage d'Ollama",
@@ -410,6 +414,8 @@ const FR = {
   head2: "Ta machine partage un seul modèle : celui-ci remplace le modèle partagé quand la chaîne se forme.",
   headDownloading: "Téléchargement du fichier du modèle", headWaiting: "En attente des porteurs de blocs", headChained: "Chaîne formée par le réseau",
   inBlocks: "En blocs :", blocksHeld: "portés", chainOn: "chaîne formée", noHead: "personne pour tenir la conversation", perBlock: "porteurs demandés pour chaque bloc",
+  holdHint: "Même une petite machine peut porter quelques blocs d'un gros modèle : elle ne télécharge que ceux-là et gagne sa part de chaque réponse.",
+  holdWanted: "Le réseau cherche des porteurs pour",
   holdNeeded: "Le réseau a surtout besoin des blocs", viaRelay: "par le relais",
   holdOpen: "Porter des blocs d'un modèle…", holdTitle: "Blocs portés par ta machine", holdStop: "Ne plus porter ces blocs",
   holdAsk: "Porter des blocs d'un modèle", holdGo: "Porter ces blocs",
@@ -434,6 +440,7 @@ const EN = {
   model: "Model", api: "OpenAI-compatible API", clear: "Clear", send: "Send", stop: "Stop",
   placeholder: "Write your message…", earned: "Earned", spent: "Spent", canSpend: "You can spend",
   account: "Account", version: "Version",
+  chainNote: "This model is held in blocks by several machines. The one that holds the conversation reads your message, as any machine that answers does. The others see the numbers of the computation pass, not the text: an expert could draw part of the meaning from them. Send nothing secret.",
   emptyTitle: "Ask your question.", emptyBody: "Your message is encrypted end to end. The machine that answers does not know who you are.",
   sOff: "Offline", sOffWhy: "Coordinator unreachable. Trying again.",
   sConnecting: "Connecting", sOllama: "Preparing", sOllamaWhy: "Starting Ollama",
@@ -495,6 +502,8 @@ const EN = {
   head2: "Your machine shares one model: this one replaces the shared model when the chain is formed.",
   headDownloading: "Downloading the model's file", headWaiting: "Waiting for block holders", headChained: "Chain formed by the network",
   inBlocks: "In blocks:", blocksHeld: "held", chainOn: "chain formed", noHead: "nobody to hold the conversation", perBlock: "holders asked for each block",
+  holdHint: "Even a small machine can hold a few blocks of a large model: it downloads only those and earns its share of every answer.",
+  holdWanted: "The network is looking for holders for",
   holdNeeded: "The network mostly needs blocks", viaRelay: "through the relay",
   holdOpen: "Hold blocks of a model…", holdTitle: "Blocks your machine holds", holdStop: "Stop holding these blocks",
   holdAsk: "Hold blocks of a model", holdGo: "Hold these blocks",
@@ -743,6 +752,12 @@ function paintHold(s) {
   const h = s.hold;
   $("holdBox").hidden = !h;
   $("holdOpen").hidden = !!h;
+  // What a machine that holds nothing is told: it can, and where the network needs it most.
+  const lacking = ((s.network && s.network.models) || []).filter(m => m.blocks && !m.chained && (m.cover || m.heads)).pop();
+  $("holdHint").hidden = !!h;
+  $("holdHint").textContent = lacking
+    ? `${T.holdWanted} ${lacking.name} : ${count((lacking.cover || []).filter(c => c > 0).length, T.blockOne, T.blockMany)} ${T.holdOf} ${lacking.blocks} ${T.blocksHeld}.`
+    : T.holdHint;
   if (!h) return;
   const held = h.last - h.first + 1;
   const known = ((s.network && s.network.models) || []).find(m => m.id === h.model);
@@ -782,17 +797,17 @@ function paintHead(s) {
 }
 $("headOpen").addEventListener("click", () => {
   const models = (last && last.network && last.network.models) || [];
-  $("cModel").replaceChildren(...models.map(m => new Option(`${m.name} (${m.size_gb} Go)`, m.id)));
-  $("cModel").value = models.length ? models[models.length - 1].id : "";
-  $("cError").hidden = true;
+  $("gModel").replaceChildren(...models.map(m => new Option(`${m.name} (${m.size_gb} Go)`, m.id)));
+  $("gModel").value = models.length ? models[models.length - 1].id : "";
+  $("gError").hidden = true;
   $("headDlg").showModal();
 });
-$("cNo").addEventListener("click", () => $("headDlg").close());
-$("cYes").addEventListener("click", async () => {
-  const resp = await post("/api/head", { on: true, model: $("cModel").value });
+$("gNo").addEventListener("click", () => $("headDlg").close());
+$("gYes").addEventListener("click", async () => {
+  const resp = await post("/api/head", { on: true, model: $("gModel").value });
   if (!resp.ok) {
-    $("cError").hidden = false;
-    $("cError").textContent = (await resp.json()).error;
+    $("gError").hidden = false;
+    $("gError").textContent = (await resp.json()).error;
     return;
   }
   $("headDlg").close();
@@ -881,6 +896,11 @@ $("splitStop").addEventListener("click", async () => { await post("/api/split", 
 
 function markModel() {
   for (const row of $("models").children) row.classList.toggle("sel", row.dataset.id === $("model").value);
+  // A model answered by a chain: say what each machine of the chain sees, before the question is asked.
+  const m = ((last && last.network && last.network.models) || []).find(x => x.id === $("model").value);
+  const mine = last && last.phase === "ready" && (last.hosted || []).includes($("model").value);
+  $("chainNote").hidden = !(m && m.chained && !mine);
+  $("chainNote").textContent = T.chainNote;
 }
 
 // Nothing that changes this machine is silent: say what it implies, then ask.

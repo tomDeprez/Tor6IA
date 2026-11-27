@@ -103,6 +103,9 @@ func (n *Node) blocksLoop(ctx context.Context) {
 		if h := n.head; h != nil && (h.State == "waiting" || h.State == "chained") {
 			req.Head = h.Model
 		}
+		if n.chain != "" && n.split != nil && n.split.State == "ready" {
+			req.Serving = chainID(n.chain) // the chain that answers now: the coordinator tests it knowingly
+		}
 		n.mu.Unlock()
 		if req.Hold == nil && req.Head == "" && !said {
 			continue

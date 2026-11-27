@@ -94,12 +94,20 @@ type NewJobReq struct {
 }
 
 type NewJobResp struct {
-	ID         string `json:"id"`
-	WorkerXPub []byte `json:"worker_xpub"`
-	WorkerXSig []byte `json:"worker_xsig"` // proves WorkerXPub belongs to the account that is paid
-	Worker     string `json:"worker"`      // the account that will be paid
-	Weight     int64  `json:"weight"`
-	MaxTokens  int    `json:"max_tokens"`
+	ID         string  `json:"id"`
+	WorkerXPub []byte  `json:"worker_xpub"`
+	WorkerXSig []byte  `json:"worker_xsig"`      // proves WorkerXPub belongs to the account that is paid
+	Worker     string  `json:"worker"`           // the account that will be paid
+	Shares     []Share `json:"shares,omitempty"` // when a chain answers: every account that is paid, and its parts
+	Weight     int64   `json:"weight"`
+	MaxTokens  int     `json:"max_tokens"`
+}
+
+// Share is one account's part of a payment. An answer computed by a chain pays the machine that
+// holds the conversation and the machines that hold the blocks, each according to its parts.
+type Share struct {
+	To    string `json:"to"`
+	Parts int64  `json:"parts"`
 }
 
 type StartReq struct {

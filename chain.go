@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -30,8 +31,23 @@ type Hold struct {
 
 // BlocksReq is sent every few seconds by a machine that holds blocks or offers to be a head.
 type BlocksReq struct {
-	Hold *Hold  `json:"hold,omitempty"`
-	Head string `json:"head,omitempty"` // the model whose conversations it offers to hold
+	Hold    *Hold  `json:"hold,omitempty"`
+	Head    string `json:"head,omitempty"`    // the model whose conversations it offers to hold
+	Serving string `json:"serving,omitempty"` // as a head: the chain it has loaded and answers with
+}
+
+// chainID names a chain by what the head was given: the model and the lines, in order.
+func chainID(chain string) string {
+	sum := sha256.Sum256([]byte(chain))
+	return hex.EncodeToString(sum[:8])
+}
+
+func (g *group) id(model string) string {
+	lines := make([]string, len(g.links))
+	for i, l := range g.links {
+		lines[i] = lineFor(l.line, l.first, l.last)
+	}
+	return chainID(model + " " + strings.Join(lines, ","))
 }
 
 type BlocksResp struct {
@@ -50,10 +66,11 @@ const (
 )
 
 type blockNode struct {
-	key  string
-	hold *Hold
-	head string
-	seen time.Time
+	key     string
+	hold    *Hold
+	head    string
+	serving string
+	seen    time.Time
 }
 
 type link struct {
@@ -114,7 +131,7 @@ func (c *Coordinator) handleBlocks(rw http.ResponseWriter, r *http.Request, key 
 	if req.Hold == nil && req.Head == "" {
 		delete(c.blockNodes, key)
 	} else {
-		c.blockNodes[key] = &blockNode{key: key, hold: req.Hold, head: req.Head, seen: time.Now()}
+		c.blockNodes[key] = &blockNode{key: key, hold: req.Hold, head: req.Head, serving: req.Serving, seen: time.Now()}
 		if req.Hold != nil {
 			c.wantPlanLocked(req.Hold.Model)
 		}
@@ -202,6 +219,9 @@ func (c *Coordinator) chainsLocked() {
 		var holds []*Hold
 		var heads []string
 		for _, n := range c.blockNodes {
+			if now.Before(c.excluded[n.key]) {
+				continue // it computed wrong: see chaintest.go
+			}
 			if n.hold != nil && n.hold.Model == m.ID && n.hold.Last <= of {
 				holders = append(holders, n)
 				holds = append(holds, n.hold)
@@ -250,14 +270,39 @@ func (c *Coordinator) chainsLocked() {
 // holdsLocked says whether a chain can go on as it is: its head still offers the model and
 // every holder still holds the blocks it was given, on the same line.
 func (c *Coordinator) holdsLocked(model string, ch *group) bool {
-	if n := c.blockNodes[ch.head]; n == nil || n.head != model {
+	now := time.Now()
+	if n := c.blockNodes[ch.head]; n == nil || n.head != model || now.Before(c.excluded[ch.head]) {
 		return false
 	}
 	for _, l := range ch.links {
 		n := c.blockNodes[l.key]
-		if n == nil || n.hold == nil || n.hold.Model != model || n.hold.Line != l.line || n.hold.First > l.first || n.hold.Last < l.last {
+		if n == nil || now.Before(c.excluded[l.key]) || n.hold == nil || n.hold.Model != model || n.hold.Line != l.line || n.hold.First > l.first || n.hold.Last < l.last {
 			return false
 		}
 	}
 	return true
+}
+
+// sharesLocked says who is paid for an answer of this machine. A machine that answers alone is
+// paid alone: no shares. The head of a chain shares with the holders: two parts in ten for
+// holding the conversation, eight for the blocks, each holder according to the blocks it has.
+func (c *Coordinator) sharesLocked(model, worker string) []Share {
+	ch := c.chains[model]
+	if ch == nil || ch.head != worker {
+		return nil
+	}
+	blocks := int64(0)
+	for _, l := range ch.links {
+		blocks += int64(l.last - l.first + 1)
+	}
+	shares := []Share{{To: worker, Parts: 2 * blocks}}
+	for _, l := range ch.links {
+		parts := 8 * int64(l.last-l.first+1)
+		if i := slices.IndexFunc(shares, func(s Share) bool { return s.To == l.key }); i >= 0 {
+			shares[i].Parts += parts // the head holds blocks too
+		} else {
+			shares = append(shares, Share{To: l.key, Parts: parts})
+		}
+	}
+	return shares
 }

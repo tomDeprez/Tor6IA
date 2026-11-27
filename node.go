@@ -655,7 +655,7 @@ func (n *Node) chatRemote(ctx context.Context, model string, pl Payload, onDelta
 	// This signature is the only thing that lets credits leave the account: it names the job,
 	// the node that is paid and the highest price. The coordinator cannot take more or reuse it.
 	maxCost := price(nj.Weight, int64(len(raw)), int64(nj.MaxTokens)*4)
-	auth := ed25519.Sign(n.id.priv, payAuthMessage(nj.ID, nj.Worker, model, maxCost))
+	auth := ed25519.Sign(n.id.priv, payAuthMessage(nj.ID, nj.Worker, model, maxCost, nj.Shares))
 	resp, err := n.call(ctx, "POST", "/v1/jobs/"+nj.ID+"/start", StartReq{EphPub: priv.PublicKey().Bytes(),
 		Payload: seal(aead, dirRequest, 0, nj.ID, raw), Max: maxCost, Auth: auth})
 	if err != nil {
