@@ -59,6 +59,7 @@ type Node struct {
 	split      *SplitStatus // the shared model runs across a group of machines
 	engineURL  string       // the engine's local API while a split is ready
 	stopEngine func()
+	splitRun   int         // counts the loads of a group: only the last one may write its state
 	hold       *HoldStatus // blocks this machine holds for the head of a group
 	stopHold   func()
 	head       *HeadStatus // this machine offers to hold the conversations of a model in blocks

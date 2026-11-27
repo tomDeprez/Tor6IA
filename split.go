@@ -139,15 +139,25 @@ func (n *Node) engineClean(all bool) {
 
 // startSplit loads the model across the group and makes it the model this machine shares.
 func (n *Node) startSplit(cfg splitConfig) {
-	fail := func(err error) {
-		log.Printf("split: %v", err)
-		n.mu.Lock()
-		n.split = &SplitStatus{Model: cfg.Model, State: "error", Error: err.Error(), Machines: cfg.Machines}
-		n.mu.Unlock()
-	}
+	// One load at a time: a block server obeys one head. A load that another one replaced stops
+	// and says nothing more.
 	n.mu.Lock()
+	n.splitRun++
+	run := n.splitRun
+	if n.stopEngine != nil {
+		n.stopEngine()
+	}
+	n.engineURL, n.stopEngine = "", nil
 	n.split = &SplitStatus{Model: cfg.Model, State: "starting", Machines: cfg.Machines}
 	n.mu.Unlock()
+	fail := func(err error) {
+		n.mu.Lock()
+		if n.splitRun == run {
+			log.Printf("split: %v", err)
+			n.split = &SplitStatus{Model: cfg.Model, State: "error", Error: err.Error(), Machines: cfg.Machines}
+		}
+		n.mu.Unlock()
+	}
 
 	ctx := context.Background()
 	// The head reads the model file Ollama keeps: have Ollama download it when it is missing.
@@ -191,6 +201,15 @@ func (n *Node) startSplit(cfg splitConfig) {
 		fail(fmt.Errorf("the engine did not start: %w", err))
 		return
 	}
+	n.mu.Lock()
+	if n.splitRun != run {
+		n.mu.Unlock()
+		stdin.Close()
+		cmd.Wait()
+		return
+	}
+	n.stopEngine = func() { stdin.Close() } // from now on, stopping the group stops this load too
+	n.mu.Unlock()
 	var ready struct {
 		URL    string       `json:"url"`
 		Blocks []SplitBlock `json:"blocks"`
@@ -206,9 +225,14 @@ func (n *Node) startSplit(cfg splitConfig) {
 	go io.Copy(io.Discard, stdout)
 
 	n.mu.Lock()
+	if n.splitRun != run {
+		n.mu.Unlock()
+		stdin.Close()
+		cmd.Wait()
+		return
+	}
 	n.split = &SplitStatus{Model: cfg.Model, State: "ready", Machines: cfg.Machines, Blocks: ready.Blocks, Of: ready.Of}
 	n.engineURL = ready.URL
-	n.stopEngine = func() { stdin.Close() }
 	n.models = []string{cfg.Model}
 	n.repollLocked()
 	n.mu.Unlock()
@@ -217,9 +241,9 @@ func (n *Node) startSplit(cfg splitConfig) {
 
 	cmd.Wait()
 	n.mu.Lock()
-	if n.engineURL != ready.URL {
+	if n.splitRun != run || n.engineURL != ready.URL {
 		n.mu.Unlock()
-		return // stopped on purpose
+		return // stopped on purpose, or replaced
 	}
 	// The engine stopped by itself: a machine of the group left. Without it this machine may not
 	// have the memory for the whole model, and then it must stop offering it.
@@ -249,6 +273,7 @@ func (n *Node) stopSplit() {
 	if n.stopEngine != nil {
 		n.stopEngine()
 	}
+	n.splitRun++ // a load in progress has nothing more to say
 	n.engineURL, n.stopEngine, n.split = "", nil, nil
 	alone := slices.ContainsFunc(n.catalog, func(m Model) bool { return m.ID == model && n.capacity(m) != "no" })
 	left := false
