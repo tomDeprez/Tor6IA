@@ -83,15 +83,22 @@ type PullStatus struct {
 	Error string  `json:"error,omitempty"`
 }
 
-// capacity says how this machine would run a model: "fast" on its graphics card (or a model
-// small enough for any processor), "slow" on the processor with enough memory, "no" otherwise.
-// It is what keeps a machine from loading a model that would freeze it.
+// capacity says how this machine would run a model: "fast" on its graphics card, or on the
+// processor for the base model; "slow" on the processor for a larger one; "no" when the
+// memory is not there. It is what keeps a machine from loading a model that would freeze it.
 func (n *Node) capacity(m Model) string {
+	// Memory needed on the processor: the model, working memory, and room left for the system.
+	onCPU, need := "slow", m.SizeGB*1300+2000
+	if m.MinVRAMMB == 0 {
+		onCPU, need = "fast", m.SizeGB*1150+1000 // the base model is made for processors and small machines
+	}
 	switch {
-	case m.MinVRAMMB <= n.vramMB:
+	case m.MinVRAMMB > 0 && m.MinVRAMMB <= n.vramMB:
 		return "fast"
-	case float64(n.ramMB) >= m.SizeGB*1300+2000: // the model, 30 % of working memory, 2 GB left for the system
-		return "slow"
+	case n.ramMB == 0 && m.MinVRAMMB == 0:
+		return onCPU // memory size unknown: let the base model try
+	case float64(n.ramMB) >= need:
+		return onCPU
 	}
 	return "no"
 }
@@ -190,14 +197,20 @@ func (n *Node) setup(ctx context.Context, want string) {
 	if want != "" {
 		list = []string{want}
 	}
+	offered := func(id string) int { return slices.IndexFunc(net.Models, func(m Model) bool { return m.ID == id }) }
+	if want != "" && offered(want) < 0 {
+		n.setPhase("error", 0, "this network does not offer the model "+want)
+		return
+	}
+	// The network may have changed its models since the list was saved: forget the ones it dropped.
+	list = slices.DeleteFunc(list, func(id string) bool { return offered(id) < 0 })
 	if len(list) == 0 {
 		list = []string{pickModel(net.Models, n.vramMB)}
 	}
-	for _, id := range list {
-		if !slices.ContainsFunc(net.Models, func(m Model) bool { return m.ID == id }) {
-			n.setPhase("error", 0, "this network does not offer the model "+id)
-			return
-		}
+	if i := offered(list[0]); want == "" && n.capacity(net.Models[i]) == "no" {
+		need := int(net.Models[i].SizeGB*1.15 + 1 + 0.99)
+		n.setPhase("error", 0, fmt.Sprintf("this machine has too little memory to share a model: %d GB are needed", need))
+		return
 	}
 
 	n.setPhase("ollama", 0, "")
@@ -389,6 +402,7 @@ func (n *Node) handleUninstall(w http.ResponseWriter, r *http.Request) {
 // workLoop asks the coordinator for jobs while sharing is on.
 func (n *Node) workLoop(ctx context.Context) {
 	xpub := n.xpriv.PublicKey().Bytes()
+	xsig := ed25519.Sign(n.id.priv, xkeyMessage(xpub))
 	for ctx.Err() == nil {
 		n.mu.Lock()
 		ready := n.sharing && n.phase == "ready" && len(n.models) > 0
@@ -401,7 +415,7 @@ func (n *Node) workLoop(ctx context.Context) {
 			sleep(ctx, time.Second)
 			continue
 		}
-		resp, err := n.call(pctx, "POST", "/v1/worker/poll", PollReq{Models: models, XPub: xpub, Version: version})
+		resp, err := n.call(pctx, "POST", "/v1/worker/poll", PollReq{Models: models, XPub: xpub, XSig: xsig, Version: version})
 		if err != nil {
 			cancel()
 			if pctx.Err() == nil {
@@ -544,6 +558,11 @@ func (n *Node) chatRemote(ctx context.Context, model string, pl Payload, onDelta
 	var nj NewJobResp
 	if err := n.callJSON(ctx, "POST", "/v1/jobs", NewJobReq{Model: model, MaxTokens: pl.MaxTokens}, &nj); err != nil {
 		return Chunk{}, false, err
+	}
+	if !validWorkerKey(nj) {
+		// The key offered is not the paid machine's: someone in the middle wants to read the prompt.
+		n.raise("the coordinator offered an encryption key that does not belong to the machine being paid")
+		return Chunk{}, true, errors.New("job refused: the encryption key is not the paid machine's") // true: do not try again
 	}
 	priv, err := ecdh.X25519().GenerateKey(rand.Reader)
 	if err != nil {

@@ -90,6 +90,7 @@ func TestNetwork(t *testing.T) {
 	})
 	ollama, failNext := fakeOllama(t)
 	c.CoolDown = 50 * time.Millisecond
+	c.RateBurst, c.RatePerSec = 1e6, 1e6 // every node of this test shares one address
 	ask := func(text string, maxTokens int) Payload {
 		return Payload{MaxTokens: maxTokens, Messages: []Message{{Role: "user", Content: text}}}
 	}
@@ -326,6 +327,17 @@ func TestCryptoAndSignature(t *testing.T) {
 	}
 	if _, err := open(kb, dirResponse, 4, "job2", sealed); err == nil {
 		t.Fatal("chunk accepted for another job")
+	}
+
+	// A job offer is accepted only when its encryption key is signed by the account it pays.
+	xpub := a.xpriv.PublicKey().Bytes()
+	offer := NewJobResp{Worker: id.Key(), WorkerXPub: xpub, WorkerXSig: ed25519.Sign(id.priv, xkeyMessage(xpub))}
+	if !validWorkerKey(offer) {
+		t.Fatal("genuine worker key refused")
+	}
+	offer.WorkerXPub = b.xpriv.PublicKey().Bytes() // a key slipped in by someone in the middle
+	if validWorkerKey(offer) {
+		t.Fatal("substituted encryption key accepted")
 	}
 }
 

@@ -30,16 +30,20 @@ const (
 	banTime         = time.Hour
 )
 
+// The catalog is one model family at four sizes, so that people compare like with like.
+// SizeGB is the real download size. Weight follows the work one token costs: gemma4:26b holds
+// 26 billion parameters but uses 4 billion per token, so it is priced below the dense 31b.
 var defaultCatalog = []Model{
-	{ID: "llama3.2:3b", Name: "Llama 3.2 3B", Weight: 1, MinVRAMMB: 0, SizeGB: 2.0},
-	{ID: "gemma3:12b", Name: "Gemma 3 12B", Weight: 4, MinVRAMMB: 10000, SizeGB: 8.1},
-	{ID: "gemma3:27b", Name: "Gemma 3 27B", Weight: 9, MinVRAMMB: 20000, SizeGB: 17},
-	{ID: "llama3.3:70b", Name: "Llama 3.3 70B", Weight: 23, MinVRAMMB: 46000, SizeGB: 43},
+	{ID: "gemma4:e2b", Name: "Gemma 4 E2B", Weight: 1, MinVRAMMB: 0, SizeGB: 4.6},
+	{ID: "gemma4:12b", Name: "Gemma 4 12B", Weight: 4, MinVRAMMB: 10000, SizeGB: 8.0},
+	{ID: "gemma4:26b", Name: "Gemma 4 26B", Weight: 6, MinVRAMMB: 22000, SizeGB: 18.7},
+	{ID: "gemma4:31b", Name: "Gemma 4 31B", Weight: 10, MinVRAMMB: 24000, SizeGB: 20.4},
 }
 
 type worker struct {
 	key         string
 	xpub        []byte
+	xsig        []byte // the account's signature of xpub
 	models      []string
 	ip          string
 	lastSeen    time.Time
@@ -62,6 +66,7 @@ type job struct {
 	requester string // empty for a canary
 	w         *worker
 	xpub      []byte // worker key at reservation time
+	xsig      []byte
 	ephPub    []byte
 	payload   []byte // nil until the requester starts the job
 	maxOut    int64
@@ -87,6 +92,8 @@ type Coordinator struct {
 	Tick        time.Duration
 	TrustProxy  bool          // read the client IP from X-Forwarded-For
 	CoolDown    time.Duration // how long a machine that failed a job is passed over
+	RateBurst   float64       // requests one address may send at once
+	RatePerSec  float64       // and how many more each second
 
 	mu         sync.Mutex
 	ledger     *Ledger
@@ -96,6 +103,35 @@ type Coordinator struct {
 	lastCanary map[string]time.Time
 	jobsDone   int64
 	bytesOut   int64
+
+	rateMu     sync.Mutex
+	rate       map[string]*bucket // every request, per address
+	ledgerRate map[string]*bucket // ledger downloads, which are large
+}
+
+type bucket struct {
+	tokens float64
+	last   time.Time
+}
+
+// allow is a token bucket per client address: a flood from one address gets 429s
+// while everyone else is served.
+func (c *Coordinator) allow(buckets map[string]*bucket, ip string, burst, perSecond float64) bool {
+	c.rateMu.Lock()
+	defer c.rateMu.Unlock()
+	now := time.Now()
+	b := buckets[ip]
+	if b == nil {
+		b = &bucket{tokens: burst, last: now}
+		buckets[ip] = b
+	}
+	b.tokens = min(burst, b.tokens+now.Sub(b.last).Seconds()*perSecond)
+	b.last = now
+	if b.tokens < 1 {
+		return false
+	}
+	b.tokens--
+	return true
 }
 
 func newCoordinator(dataDir string) (*Coordinator, error) {
@@ -115,6 +151,10 @@ func newCoordinator(dataDir string) (*Coordinator, error) {
 		CanaryEvery: 10 * time.Minute,
 		Tick:        5 * time.Second,
 		CoolDown:    30 * time.Second,
+		RateBurst:   300,
+		RatePerSec:  60,
+		rate:        map[string]*bucket{},
+		ledgerRate:  map[string]*bucket{},
 		ledger:      l,
 		workers:     map[string]*worker{},
 		jobs:        map[string]*job{},
@@ -144,7 +184,19 @@ func (c *Coordinator) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/worker/leave", c.auth(c.handleLeave))
 	mux.HandleFunc("POST /v1/jobs", c.auth(c.handleNewJob))
 	mux.HandleFunc("POST /v1/jobs/{id}/start", c.auth(c.handleStart))
-	return mux
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ip := c.clientIP(r)
+		ok := c.allow(c.rate, ip, c.RateBurst, c.RatePerSec)
+		if ok && r.URL.Path == "/v1/ledger" {
+			ok = c.allow(c.ledgerRate, ip, 4, 1.0/30) // a node audits every 30 minutes
+		}
+		if !ok {
+			w.Header().Set("Retry-After", "5")
+			httpErr(w, 429, "slow_down", "too many requests from this address")
+			return
+		}
+		mux.ServeHTTP(w, r)
+	})
 }
 
 // Run drives the watchdog and the canaries until ctx ends.
@@ -250,6 +302,10 @@ func (c *Coordinator) handlePoll(rw http.ResponseWriter, r *http.Request, key st
 		httpErr(rw, 400, "bad_request", "bad poll")
 		return
 	}
+	if pub, _ := hex.DecodeString(key); !ed25519.Verify(pub, xkeyMessage(req.XPub), req.XSig) {
+		httpErr(rw, 400, "update_required", "this version of Tor6IA is too old for the network: update it")
+		return
+	}
 	ip := c.clientIP(r)
 
 	c.mu.Lock()
@@ -269,7 +325,7 @@ func (c *Coordinator) handlePoll(rw http.ResponseWriter, r *http.Request, key st
 		w = &worker{key: key}
 		c.workers[key] = w
 	}
-	w.ip, w.xpub, w.lastSeen = ip, req.XPub, time.Now()
+	w.ip, w.xpub, w.xsig, w.lastSeen = ip, req.XPub, req.XSig, time.Now()
 	w.models = w.models[:0]
 	for _, m := range req.Models {
 		if c.model(m) != nil {
@@ -446,7 +502,7 @@ func (c *Coordinator) finishLocked(j *job, errMsg string, last Chunk) {
 }
 
 func (c *Coordinator) newJobLocked(m *Model, w *worker, requester string, maxTokens int64) *job {
-	j := &job{id: randHex(12), model: m.ID, weight: m.Weight, requester: requester, w: w, xpub: w.xpub,
+	j := &job{id: randHex(12), model: m.ID, weight: m.Weight, requester: requester, w: w, xpub: w.xpub, xsig: w.xsig,
 		maxOut: maxTokens * 4, chunks: make(chan Chunk, 1024), created: time.Now()}
 	w.job = j
 	c.jobs[j.id] = j
@@ -505,7 +561,7 @@ func (c *Coordinator) handleNewJob(rw http.ResponseWriter, r *http.Request, key 
 		if w != nil {
 			j := c.newJobLocked(m, w, key, int64(req.MaxTokens))
 			c.mu.Unlock()
-			writeJSON(rw, 200, NewJobResp{ID: j.id, WorkerXPub: j.xpub, Worker: w.key, Weight: m.Weight, MaxTokens: req.MaxTokens})
+			writeJSON(rw, 200, NewJobResp{ID: j.id, WorkerXPub: j.xpub, WorkerXSig: j.xsig, Worker: w.key, Weight: m.Weight, MaxTokens: req.MaxTokens})
 			return
 		}
 		c.mu.Unlock()
@@ -606,6 +662,15 @@ func (c *Coordinator) sweep() {
 			delete(c.workers, k)
 		}
 	}
+	c.rateMu.Lock()
+	for _, buckets := range []map[string]*bucket{c.rate, c.ledgerRate} {
+		for ip, b := range buckets {
+			if now.Sub(b.last) > 3*time.Minute { // long enough for any bucket to be full again
+				delete(buckets, ip)
+			}
+		}
+	}
+	c.rateMu.Unlock()
 	for ip, t := range c.lastCanary {
 		if now.Sub(t) > c.CanaryEvery {
 			delete(c.lastCanary, ip)

@@ -216,7 +216,10 @@ func ollamaChat(ctx context.Context, base, model string, pl Payload, onDelta fun
 		opts["top_p"] = *pl.TopP
 	}
 	body, _ := json.Marshal(map[string]any{
-		"model": model, "messages": pl.Messages, "stream": true, "options": opts, "keep_alive": "30m"})
+		"model": model, "messages": pl.Messages, "stream": true, "options": opts, "keep_alive": "30m",
+		// Reasoning models think before they answer. That text is not sent to the requester, so it is
+		// work nobody is paid for, and a short answer budget can be spent on it entirely.
+		"think": false})
 	req, _ := http.NewRequestWithContext(ctx, "POST", base+"/api/chat", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)

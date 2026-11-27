@@ -5,108 +5,127 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tor6IA</title>
 <style>
+  /* A grid control room: night blue, a condensed industrial face, and one colour per machine state. */
   :root {
-    --bg: #f5f2ea; --panel: #fbf9f4; --ink: #1b1d1a; --soft: #6b6f66; --line: #dedacd; --bubble: #e9e5d8;
-    --accent: #1c7a4c; --accent-ink: #fff; --bad: #a3262a;
-    /* One colour per node state. Each is also named in words on the button. */
-    --s-idle: #1c7a4c; --s-work: #1f5fd1; --s-setup: #b06a00; --s-paused: #6b6f66; --s-off: #55584f; --s-error: #a3262a;
+    --bg: #e9edf4; --panel: #f6f8fb; --card: #ffffff; --ink: #0d1a2d; --soft: #55627a; --line: #cfd7e3;
+    --accent: #2443d6; --accent-ink: #fff; --bad: #b3261e; --debt: #b86a00;
+    --s-idle: #0a7d5e; --s-work: #3a2be0; --s-setup: #b86a00; --s-paused: #55627a; --s-off: #3c4658; --s-error: #b3261e;
+    --display: Bahnschrift, "DIN Alternate", "Avenir Next Condensed", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif;
+    --text: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #111311; --panel: #181b18; --ink: #ecebe4; --soft: #9a9f93; --line: #2b2f2a; --bubble: #232723;
-      --accent: #58cf94; --accent-ink: #08130d; --bad: #f08a8a;
-      --s-idle: #1f8f58; --s-work: #2f6fe0; --s-setup: #b9740a; --s-paused: #4a4e47; --s-off: #3a3d38; --s-error: #b3353a;
+      --bg: #0a101c; --panel: #0f1727; --card: #162034; --ink: #e9eef7; --soft: #93a0b8; --line: #25314a;
+      --accent: #7f95ff; --accent-ink: #060b16; --bad: #ff8f85; --debt: #f0a845;
+      --s-idle: #0c9470; --s-work: #5646ff; --s-setup: #c77a08; --s-paused: #3b4760; --s-off: #2a3449; --s-error: #c5352c;
     }
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
-  body { background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, "Segoe UI", sans-serif; display: flex; }
+  body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--text); display: flex; }
   button, select, textarea { font: inherit; color: inherit; }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-  aside { width: 328px; flex: none; background: var(--panel); border-right: 1px solid var(--line);
-    padding: 24px 22px; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; }
-  aside > * { flex: none; } /* a tall column scrolls: it must not squash the state button */
-  .brand { font: 600 24px/1 Georgia, "Iowan Old Style", serif; letter-spacing: -.01em; }
-  .brand b { color: var(--accent); font-weight: 600; }
-  .tag { color: var(--soft); font-size: 13px; margin-top: 6px; }
-  h2 { font-size: 11px; letter-spacing: .09em; text-transform: uppercase; color: var(--soft); margin: 0 0 8px; font-weight: 600; }
+  aside { width: 344px; flex: none; background: var(--panel); border-right: 1px solid var(--line);
+    padding: 22px 20px; display: flex; flex-direction: column; gap: 22px; overflow-y: auto; }
+  aside > * { flex: none; } /* a tall column scrolls: it must not squash the state block */
+  .brand { font: 700 30px/1 var(--display); letter-spacing: .01em; }
+  .tag { color: var(--soft); font-size: 13px; margin-top: 6px; max-width: 30ch; }
+  h2 { font: 600 15px/1.2 var(--display); letter-spacing: .02em; color: var(--soft); margin: 0 0 10px; }
 
-  /* The state button: the one place that says what this machine is doing. Click pauses or resumes sharing. */
-  #power { --c: var(--s-off); width: 100%; border: 0; border-radius: 16px; padding: 16px 18px; cursor: pointer; text-align: left;
-    background: var(--c); color: #fff; display: flex; align-items: center; gap: 14px; position: relative; overflow: hidden;
-    transition: background .25s; }
+  /* The state block: the one place that says what this machine is doing. Click pauses or resumes sharing. */
+  #power { --c: var(--s-off); width: 100%; border: 0; border-radius: 20px; padding: 18px 20px 16px; cursor: pointer; text-align: left;
+    background: var(--c); color: #fff; display: block; position: relative; overflow: hidden; transition: background .3s; }
   #power[data-state=idle] { --c: var(--s-idle); }
   #power[data-state=work] { --c: var(--s-work); }
   #power[data-state=setup] { --c: var(--s-setup); }
   #power[data-state=paused] { --c: var(--s-paused); }
   #power[data-state=error] { --c: var(--s-error); }
-  #power .lamp { width: 14px; height: 14px; border-radius: 50%; background: #fff; flex: none; }
-  #power[data-state=paused] .lamp, #power[data-state=off] .lamp { background: none; box-shadow: inset 0 0 0 2px #fff; }
-  #power[data-state=work] .lamp { animation: beat .9s ease-in-out infinite; }
-  #power[data-state=setup] .lamp { animation: beat 1.6s ease-in-out infinite; }
-  @keyframes beat { 50% { transform: scale(.45); opacity: .6; } }
-  #power .what { display: block; font-weight: 700; font-size: 18px; line-height: 1.2; }
-  #power .why { display: block; font-size: 12.5px; line-height: 1.35; opacity: .92; margin-top: 3px; overflow-wrap: anywhere; }
-  #power .fill { position: absolute; left: 0; bottom: 0; height: 4px; background: #fff; opacity: .85; transition: width .4s; }
-  @media (prefers-reduced-motion: reduce) { #power .lamp { animation: none !important; } }
+  #power .what { display: block; font: 700 34px/1 var(--display); letter-spacing: .01em; }
+  #power .why { display: block; font-size: 13px; line-height: 1.4; opacity: .93; overflow-wrap: anywhere; }
+  #power .fill { position: absolute; left: 0; bottom: 0; height: 5px; background: #fff; opacity: .9; transition: width .4s; }
+  /* The pulse: flat when nothing flows, slow when connected, fast when the machine computes. */
+  .pulse { display: block; width: 100%; height: 34px; margin: 10px 0 8px; overflow: hidden; }
+  .pulse path { fill: none; stroke: #fff; stroke-width: 2; stroke-linejoin: round; vector-effect: non-scaling-stroke;
+    transform-box: fill-box; transform-origin: center; transform: scaleY(.04); opacity: .55; transition: transform .5s, opacity .5s; }
+  #power[data-state=idle] .pulse path { transform: scaleY(.3); opacity: .8; animation: flow 9s linear infinite; }
+  #power[data-state=setup] .pulse path { transform: scaleY(.5); opacity: .8; animation: flow 5s linear infinite; }
+  #power[data-state=work] .pulse path { transform: scaleY(1); opacity: 1; animation: flow 1.6s linear infinite; }
+  @keyframes flow { to { translate: -50% 0; } }
+  @media (prefers-reduced-motion: reduce) { .pulse path { animation: none !important; } }
 
-  .balance { font: 300 48px/1 "Segoe UI", system-ui, sans-serif; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
-  .sub { color: var(--soft); font-size: 13px; margin-top: 8px; font-variant-numeric: tabular-nums; }
-  #models { display: flex; flex-direction: column; gap: 6px; }
-  .model { border: 1px solid var(--line); border-radius: 10px; position: relative; line-height: 1.35; }
+  .balance { font: 700 60px/0.95 var(--display); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+  /* The gauge shows where the balance sits between the overdraft limit and what was earned. Zero is marked. */
+  .gauge { position: relative; height: 10px; border-radius: 5px; background: var(--line); margin-top: 14px; }
+  .gauge .bar { position: absolute; top: 0; bottom: 0; border-radius: 5px; background: var(--s-idle); }
+  .gauge .bar.debt { background: var(--debt); }
+  .gauge .zero { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--ink); }
+  .scale { position: relative; height: 18px; font-size: 12px; color: var(--soft); font-variant-numeric: tabular-nums; margin-top: 4px; }
+  .scale span { position: absolute; top: 0; }
+  .scale .zeroLabel { translate: -50% 0; }
+  .scale .maxLabel { right: 0; }
+  dl { margin: 0; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 13.5px; }
+  dt { color: var(--soft); } dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .money dl { margin-top: 10px; }
+  .note { color: var(--soft); font-size: 13px; margin: 10px 0 0; }
+
+  #models { display: flex; flex-direction: column; gap: 8px; }
+  .model { background: var(--card); border: 1px solid var(--line); border-radius: 12px; position: relative; line-height: 1.35; }
   .model.sel { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
-  .model .pick { width: 100%; text-align: left; background: none; border: 0; padding: 8px 12px; cursor: pointer; border-radius: 10px; }
-  /* The share button sits on the second line, to the right of the text it must not cover. */
-  .model .share { position: absolute; right: 8px; bottom: 7px; font-size: 12px; padding: 3px 9px; border-radius: 999px;
-    border: 1px solid var(--line); background: none; cursor: pointer; white-space: nowrap; }
-  .model .share.on { border-color: var(--accent); color: var(--accent); }
-  .model .share:disabled { opacity: .5; cursor: default; }
-  .model .info.bad { color: var(--bad); }
-  dialog { background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 16px; padding: 24px; max-width: 440px; }
-  dialog::backdrop { background: rgb(0 0 0 / .55); }
-  dialog h3 { margin: 0 0 12px; font: 400 22px/1.2 Georgia, "Iowan Old Style", serif; }
-  dialog ul { margin: 0 0 20px; padding-left: 18px; display: grid; gap: 8px; font-size: 14px; }
-  dialog label { display: flex; gap: 8px; align-items: baseline; font-size: 14px; margin: 0 0 20px; cursor: pointer; }
-  dialog label[hidden] { display: none; }
-  .foot button { background: none; border: 0; padding: 0; margin-top: 10px; color: var(--soft); font-size: 12px; text-decoration: underline; cursor: pointer; }
-  dialog .acts { display: flex; justify-content: flex-end; gap: 10px; }
-  dialog .acts button { border-radius: 10px; padding: 9px 16px; cursor: pointer; border: 1px solid var(--line); background: none; }
-  dialog .acts .go { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  .model .pick { width: 100%; text-align: left; background: none; border: 0; padding: 10px 12px; cursor: pointer; border-radius: 12px; }
   .model .top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
-  .model .name { font-weight: 600; white-space: nowrap; }
-  .model .count { font-size: 12.5px; font-variant-numeric: tabular-nums; color: var(--accent); white-space: nowrap; }
-  .model .count.none { color: var(--soft); }
-  .model .info { font-size: 12.5px; color: var(--soft); display: block; padding-right: 92px; min-height: 26px; }
-  dl { margin: 0; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 13px; }
-  dt { color: var(--soft); } dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
-  .foot { margin-top: auto; font-size: 12px; color: var(--soft); }
-  code { font: 12px ui-monospace, Consolas, monospace; background: var(--bubble); padding: 1px 5px; border-radius: 4px; }
+  .model .name { font: 700 19px/1.1 var(--display); white-space: nowrap; }
+  .model .price { font: 600 13px/1 var(--display); color: var(--soft); margin-left: 6px; }
+  .model .count { font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--s-idle); white-space: nowrap; }
+  .model .count.none { color: var(--soft); font-weight: 400; }
+  .model .info { font-size: 12.5px; color: var(--soft); display: block; padding-right: 96px; min-height: 30px; margin-top: 3px; }
+  .model .info.bad { color: var(--bad); }
+  /* The share button sits on the second line, to the right of the text it must not cover. */
+  .model .share { position: absolute; right: 9px; bottom: 9px; font-size: 12px; font-weight: 600; padding: 4px 11px; border-radius: 999px;
+    border: 1px solid var(--line); background: var(--panel); cursor: pointer; white-space: nowrap; }
+  .model .share.on { border-color: var(--s-idle); background: var(--s-idle); color: #fff; }
+  .model .share:disabled { opacity: .5; cursor: default; }
+
+  .foot { margin-top: auto; font-size: 12px; color: var(--soft); display: grid; gap: 4px; }
+  code { font: 12px ui-monospace, Consolas, monospace; background: var(--card); border: 1px solid var(--line); padding: 1px 6px; border-radius: 5px; }
+  .foot button { justify-self: start; background: none; border: 0; padding: 0; margin-top: 6px; color: var(--soft); font-size: 12px; text-decoration: underline; cursor: pointer; }
+  #upLink { color: var(--accent); font-weight: 600; }
 
   main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
   #alert { background: var(--s-error); color: #fff; padding: 10px 28px; font-weight: 600; }
   header { padding: 14px 28px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 12px; }
   header label { color: var(--soft); font-size: 13px; }
-  select { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; max-width: 100%; }
+  select { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; max-width: 100%; font-weight: 600; }
   header button { margin-left: auto; background: none; border: 0; color: var(--soft); cursor: pointer; font-size: 13px; padding: 6px; }
-  #log { flex: 1; overflow-y: auto; padding: 28px; display: flex; flex-direction: column; gap: 14px; }
-  .empty { margin: auto; text-align: center; color: var(--soft); max-width: 440px; }
-  .empty h1 { font: 400 30px/1.2 Georgia, "Iowan Old Style", serif; color: var(--ink); margin: 0 0 12px; }
-  .msg { max-width: 760px; width: fit-content; white-space: pre-wrap; overflow-wrap: anywhere; }
-  .msg.user { align-self: flex-end; background: var(--bubble); padding: 10px 14px; border-radius: 14px 14px 4px 14px; }
+  #log { flex: 1; overflow-y: auto; padding: 28px; display: flex; flex-direction: column; gap: 16px; }
+  .empty { margin: auto; text-align: center; color: var(--soft); max-width: 46ch; }
+  .empty h1 { font: 700 44px/1 var(--display); color: var(--ink); margin: 0 0 14px; }
+  .msg { max-width: 72ch; width: fit-content; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .msg.user { align-self: flex-end; background: var(--accent); color: var(--accent-ink); padding: 10px 15px; border-radius: 16px 16px 4px 16px; }
+  .msg.bot { background: var(--card); border: 1px solid var(--line); padding: 12px 16px; border-radius: 16px 16px 16px 4px; }
   .msg.err { color: var(--bad); }
-  .msg pre { background: var(--bubble); padding: 12px; border-radius: 8px; overflow-x: auto; margin: 6px 0; white-space: pre; }
-  .msg pre code { background: none; padding: 0; }
-  .meta { font-size: 12px; color: var(--soft); margin-top: 4px; }
+  .msg pre { background: var(--bg); padding: 12px; border-radius: 8px; overflow-x: auto; margin: 8px 0; white-space: pre; }
+  .msg pre code { background: none; border: 0; padding: 0; }
+  .meta { font-size: 12px; color: var(--soft); margin-top: 6px; }
   form { padding: 16px 28px 24px; display: flex; gap: 10px; align-items: flex-end; }
-  textarea { flex: 1; resize: none; background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
-    padding: 12px 14px; min-height: 48px; max-height: 200px; }
-  form button { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 12px; padding: 0 20px;
-    height: 48px; font-weight: 600; cursor: pointer; }
+  textarea { flex: 1; resize: none; background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 13px 15px; min-height: 50px; max-height: 200px; }
+  form button { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 14px; padding: 0 22px;
+    height: 50px; font: 700 17px var(--display); letter-spacing: .02em; cursor: pointer; }
 
-  @media (max-width: 760px) {
+  dialog { background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 20px; padding: 26px; max-width: 460px; }
+  dialog::backdrop { background: rgb(4 8 16 / .6); }
+  dialog h3 { margin: 0 0 14px; font: 700 26px/1.1 var(--display); }
+  dialog ul { margin: 0 0 20px; padding-left: 18px; display: grid; gap: 8px; font-size: 14px; }
+  dialog label { display: flex; gap: 8px; align-items: baseline; font-size: 14px; margin: 0 0 20px; cursor: pointer; }
+  dialog label[hidden] { display: none; }
+  dialog .acts { display: flex; justify-content: flex-end; gap: 10px; }
+  dialog .acts button { border-radius: 12px; padding: 10px 18px; cursor: pointer; border: 1px solid var(--line); background: none; font-weight: 600; }
+  dialog .acts .go { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+  @media (max-width: 780px) {
     body { flex-direction: column; }
-    aside { width: auto; border-right: 0; border-bottom: 1px solid var(--line); padding: 16px; gap: 16px; }
+    aside { width: auto; border-right: 0; border-bottom: 1px solid var(--line); padding: 16px; gap: 18px; }
     .foot, #netBox { display: none; }
     header, form, #log, #alert { padding-left: 16px; padding-right: 16px; }
     main { min-height: 70vh; }
@@ -116,21 +135,32 @@
 <body>
 <aside>
   <div>
-    <div class="brand">Tor<b>6</b>IA</div>
+    <div class="brand">Tor6IA</div>
     <div class="tag" data-t="tagline"></div>
   </div>
 
   <button type="button" id="power" data-state="off" aria-live="polite">
-    <span class="lamp"></span>
-    <span><span class="what" id="what"></span><span class="why" id="why"></span></span>
+    <span class="what" id="what"></span>
+    <svg class="pulse" viewBox="0 0 300 40" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M0 20H40L48 20L56 4L66 36L74 20H150L158 20L166 10L174 30L182 20H300H340L348 20L356 4L366 36L374 20H450L458 20L466 10L474 30L482 20H600"/>
+    </svg>
+    <span class="why" id="why"></span>
     <span class="fill" id="fill" style="width:0"></span>
   </button>
 
-  <section>
+  <section class="money">
     <h2 data-t="credits"></h2>
     <div class="balance" id="balance">–</div>
-    <div class="sub" id="flows"></div>
-    <div class="sub" id="spend"></div>
+    <div id="gaugeBox" hidden>
+      <div class="gauge"><i class="bar" id="gBar"></i><i class="zero" id="gZero"></i></div>
+      <div class="scale"><span id="gMin"></span><span class="zeroLabel" id="gZeroLabel">0</span><span class="maxLabel" id="gMax"></span></div>
+    </div>
+    <dl>
+      <dt data-t="earned"></dt><dd id="mEarned">–</dd>
+      <dt data-t="spent"></dt><dd id="mSpent">–</dd>
+      <dt data-t="canSpend"></dt><dd id="mSpend">–</dd>
+    </dl>
+    <p class="note" id="spendNote" hidden></p>
   </section>
 
   <section>
@@ -151,8 +181,9 @@
 
   <div class="foot">
     <div data-t="api"></div>
-    <code id="apiUrl"></code>
-    <div style="margin-top:8px" id="acct"></div>
+    <div><code id="apiUrl"></code></div>
+    <div id="acct"></div>
+    <div id="ver"></div>
     <button type="button" id="upLink" hidden></button>
     <button type="button" id="uninstall" data-t="uninstall"></button>
   </div>
@@ -188,23 +219,23 @@ const FR = {
   credits: "Crédits", models: "Modèles", network: "Réseau", nodes: "Machines en ligne",
   jobs: "Réponses calculées", served: "Calculées par moi", circulating: "Crédits en circulation", ledger: "Registre",
   model: "Modèle", api: "API compatible OpenAI", clear: "Effacer", send: "Envoyer", stop: "Arrêter",
-  placeholder: "Écris ton message…", earned: "gagnés", spent: "dépensés", account: "Compte",
+  placeholder: "Écris ton message…", earned: "Gagnés", spent: "Dépensés", canSpend: "Tu peux dépenser",
+  account: "Compte", version: "Version",
   emptyTitle: "Pose ta question.", emptyBody: "Ton message est chiffré de bout en bout. La machine qui répond ne sait pas qui tu es.",
   sOff: "Hors ligne", sOffWhy: "Coordinateur injoignable. Nouvel essai en cours.",
-  sConnecting: "Connexion…", sOllama: "Préparation", sOllamaWhy: "Démarrage d'Ollama",
+  sConnecting: "Connexion", sOllama: "Préparation", sOllamaWhy: "Démarrage d'Ollama",
   sInstall: "Installation", sInstallWhy: "Téléchargement d'Ollama", sPull: "Installation", sPullWhy: "Téléchargement de",
   sIdle: "Connecté", sIdleWhy: "En attente d'un calcul. Clique pour mettre en pause.",
   sWork: "Calcul en cours", sWorkWhy: "Ta machine travaille pour quelqu'un : tu gagnes des crédits.",
   sPaused: "En pause", sPausedWhy: "Tu ne partages pas. Clique pour reprendre.",
   sError: "Problème", sAlert: "Alerte",
-  canSpend: "Tu peux dépenser", notVouched: "Découvert de 200 crédits débloqué dès que ta machine réussit un calcul de test.",
+  notVouched: "Découvert de 200 crédits débloqué dès que ta machine réussit un calcul de test.",
   solo: "Mode solo : réseau limité à cette machine.",
-  online: "en ligne", mine: "sur ta machine · gratuit", tokenForYou: "token pour toi", tokensForYou: "tokens pour toi", noOne: "personne",
+  online: "en ligne", mine: "Sur ta machine, gratuit", tokenForYou: "token avec ton solde", tokensForYou: "tokens avec ton solde", noOne: "personne",
   verified: "vérifié", entry: "écriture", entries: "écritures", checking: "vérification…",
-  local: "local, gratuit", free: "calculé sur ta machine · gratuit", cost: "crédits",
-  insufficient_credits: "Pas assez de crédits. Laisse le partage activé : chaque calcul fait pour un autre t'en rapporte.",
+  free: "Calculé sur ta machine, gratuit", cost: "crédits",
   share: "Partager", shared: "Partagé ✓", unshare: "Ne plus partager", tooSmall: "Trop gros", cancel: "Annuler",
-  downloading: "téléchargement",
+  downloading: "Téléchargement",
   cDownload: "Téléchargement, si le modèle n'est pas déjà sur ta machine :",
   cSlow: "Ta machine n'a pas de carte graphique assez grande pour ce modèle. Il tournera sur le processeur : réponses lentes, machine très sollicitée pendant un calcul.",
   cFast: "Ta machine a les ressources pour ce modèle.",
@@ -222,34 +253,35 @@ const FR = {
   u4: "Ollama reste installé : retire-le depuis les paramètres de ton système si tu ne t'en sers pas.",
   uForget: "Supprimer aussi mon compte. Solde perdu :",
   uDone: "Tor6IA est désinstallé. Tu peux fermer cet onglet.",
-  upTitle: "Mise à jour disponible :", upYes: "Mettre à jour", upLater: "Plus tard", upLink: "Mise à jour disponible",
+  upTitle: "Mise à jour disponible :", upYes: "Mettre à jour", upLater: "Plus tard", upLink: "Mise à jour disponible :",
   upDoing: "Mise à jour en cours, le programme redémarre…", upFailed: "La mise à jour a échoué :",
-  waiting: "attend une machine assez puissante",
+  waiting: "Attend une machine assez puissante",
+  insufficient_credits: "Pas assez de crédits. Laisse le partage activé : chaque calcul fait pour un autre t'en rapporte.",
   no_worker: "Personne ne propose ce modèle pour l'instant : il attend une machine assez puissante.", busy: "Toutes les machines sont occupées. Réessaie dans un instant.",
-  truncated: "réponse coupée (limite atteinte)", failed: "Erreur"
+  truncated: "Réponse coupée : limite atteinte.", failed: "Erreur"
 };
 const EN = {
   tagline: "AI in common. Lend your machine, earn credits.",
   credits: "Credits", models: "Models", network: "Network", nodes: "Machines online",
   jobs: "Answers computed", served: "Computed by me", circulating: "Credits in circulation", ledger: "Ledger",
   model: "Model", api: "OpenAI-compatible API", clear: "Clear", send: "Send", stop: "Stop",
-  placeholder: "Write your message…", earned: "earned", spent: "spent", account: "Account",
+  placeholder: "Write your message…", earned: "Earned", spent: "Spent", canSpend: "You can spend",
+  account: "Account", version: "Version",
   emptyTitle: "Ask your question.", emptyBody: "Your message is encrypted end to end. The machine that answers does not know who you are.",
   sOff: "Offline", sOffWhy: "Coordinator unreachable. Trying again.",
-  sConnecting: "Connecting…", sOllama: "Preparing", sOllamaWhy: "Starting Ollama",
+  sConnecting: "Connecting", sOllama: "Preparing", sOllamaWhy: "Starting Ollama",
   sInstall: "Installing", sInstallWhy: "Downloading Ollama", sPull: "Installing", sPullWhy: "Downloading",
   sIdle: "Connected", sIdleWhy: "Waiting for a job. Click to pause.",
   sWork: "Computing", sWorkWhy: "Your machine works for someone: you earn credits.",
   sPaused: "Paused", sPausedWhy: "You are not sharing. Click to resume.",
   sError: "Problem", sAlert: "Alert",
-  canSpend: "You can spend", notVouched: "Overdraft of 200 credits unlocked as soon as your machine passes a test job.",
+  notVouched: "Overdraft of 200 credits unlocked as soon as your machine passes a test job.",
   solo: "Solo mode: the network is this machine only.",
-  online: "online", mine: "on your machine · free", tokenForYou: "token for you", tokensForYou: "tokens for you", noOne: "no one",
+  online: "online", mine: "On your machine, free", tokenForYou: "token with your balance", tokensForYou: "tokens with your balance", noOne: "no one",
   verified: "verified", entry: "entry", entries: "entries", checking: "checking…",
-  local: "local, free", free: "computed on your machine · free", cost: "credits",
-  insufficient_credits: "Not enough credits. Keep sharing on: every job done for someone else earns some.",
+  free: "Computed on your machine, free", cost: "credits",
   share: "Share", shared: "Shared ✓", unshare: "Stop sharing", tooSmall: "Too big", cancel: "Cancel",
-  downloading: "downloading",
+  downloading: "Downloading",
   cDownload: "Download, if the model is not on your machine yet:",
   cSlow: "Your machine has no graphics card large enough for this model. It will run on the processor: slow answers, and a very busy machine during a job.",
   cFast: "Your machine has the resources for this model.",
@@ -267,11 +299,12 @@ const EN = {
   u4: "Ollama stays installed: remove it from your system settings if you do not use it.",
   uForget: "Also delete my account. Balance lost:",
   uDone: "Tor6IA is uninstalled. You can close this tab.",
-  upTitle: "Update available:", upYes: "Update", upLater: "Later", upLink: "Update available",
+  upTitle: "Update available:", upYes: "Update", upLater: "Later", upLink: "Update available:",
   upDoing: "Updating, the program restarts…", upFailed: "The update failed:",
-  waiting: "waits for a machine powerful enough",
+  waiting: "Waits for a machine powerful enough",
+  insufficient_credits: "Not enough credits. Keep sharing on: every job done for someone else earns some.",
   no_worker: "No one offers this model right now: it waits for a machine powerful enough.", busy: "All machines are busy. Try again in a moment.",
-  truncated: "answer cut (limit reached)", failed: "Error"
+  truncated: "Answer cut: limit reached.", failed: "Error"
 };
 const T = navigator.language.startsWith("fr") ? FR : EN;
 document.documentElement.lang = T === FR ? "fr" : "en";
@@ -327,6 +360,22 @@ function nodeState(s) {
   return ["idle", T.sIdle, T.sIdleWhy];
 }
 
+// The gauge runs from the overdraft limit to the highest of 200 and the balance. Zero is always marked.
+function paintGauge(a) {
+  const line = a.vouched ? 200 : 0, top = Math.max(200, a.balance), span = line + top;
+  const at = v => (v + line) / span * 100;
+  const zero = at(0), here = at(Math.max(-line, a.balance));
+  $("gaugeBox").hidden = false;
+  $("gZero").style.left = `calc(${zero}% - 1px)`;
+  $("gZeroLabel").style.left = zero + "%";
+  $("gZeroLabel").hidden = line === 0;
+  $("gBar").className = "bar" + (a.balance < 0 ? " debt" : "");
+  $("gBar").style.left = Math.min(zero, here) + "%";
+  $("gBar").style.width = Math.abs(here - zero) + "%";
+  $("gMin").textContent = line ? num(-line) : "0";
+  $("gMax").textContent = num(top);
+}
+
 function paint(s) {
   const a = s.account, net = s.network;
   sharing = s.sharing;
@@ -341,16 +390,22 @@ function paint(s) {
   $("alert").textContent = s.alert || "";
 
   $("balance").textContent = a ? num(a.balance) : "–";
-  $("flows").textContent = a ? `+${num(a.earned)} ${T.earned} · −${num(a.spent)} ${T.spent}` : "";
-  $("spend").textContent = s.solo ? T.solo : !a ? "" : `${T.canSpend} : ${num(Math.max(a.spendable, 0))}` + (a.vouched ? "" : `. ${T.notVouched}`);
-  $("acct").textContent = `${T.account} ${s.key.slice(0, 12)}… · ${s.version}`;
+  $("mEarned").textContent = a ? num(a.earned) : "–";
+  $("mSpent").textContent = a ? num(a.spent) : "–";
+  $("mSpend").textContent = a ? num(Math.max(a.spendable, 0)) : "–";
+  if (a) paintGauge(a);
+  const note = s.solo ? T.solo : a && !a.vouched ? T.notVouched : "";
+  $("spendNote").hidden = !note;
+  $("spendNote").textContent = note;
+  $("acct").textContent = `${T.account} ${s.key.slice(0, 12)}…`;
+  $("ver").textContent = `${T.version} ${s.version}`;
   offerUpdate(s);
 
   $("nNodes").textContent = net ? num(net.workers) : "–";
   $("nJobs").textContent = net ? num(net.jobs_done) : "–";
   $("nServed").textContent = num(s.served);
   $("nCirc").textContent = net ? num(net.circulating) : "–";
-  $("nLedger").textContent = s.audit ? `${T.verified} ✓ · ${count(s.audit.entries, T.entry, T.entries)}` : T.checking;
+  $("nLedger").textContent = s.audit ? `${T.verified} ✓ ${count(s.audit.entries, T.entry, T.entries)}` : T.checking;
   if (!net) return;
 
   const mine = s.phase === "ready" ? (s.hosted || []) : [];
@@ -360,7 +415,7 @@ function paint(s) {
   catalogSig = sig;
   const sel = $("model"), keep = sel.value;
   sel.replaceChildren();
-  for (const m of net.models) sel.append(new Option(`${m.name} · ×${m.weight}`, m.id));
+  for (const m of net.models) sel.append(new Option(`${m.name} ×${m.weight}`, m.id));
   const usable = net.models.find(m => mine.includes(m.id)) || net.models.find(m => m.workers > 0);
   // Until the user chooses, follow the best option: a model of their own, else one that has machines.
   sel.value = picked && keep ? keep : (usable ? usable.id : net.models[0]?.id);
@@ -374,12 +429,12 @@ function paint(s) {
     // Left: choose this model for the conversation.
     const pick = el("button", "pick");
     pick.type = "button";
-    const top = el("span", "top");
-    top.append(el("span", "name", m.name),
-      el("span", "count" + (m.workers ? "" : " none"), m.workers ? `${num(m.workers)} ${T.online}` : T.noOne));
+    const top = el("span", "top"), title = el("span");
+    title.append(el("span", "name", m.name), el("span", "price", `×${m.weight}`));
+    top.append(title, el("span", "count" + (m.workers ? "" : " none"), m.workers ? `${num(m.workers)} ${T.online}` : T.noOne));
     const info = pull ? (pull.error || `${T.downloading} ${Math.floor(pull.pct)} %`) : hosted ? T.mine
-      : !m.workers ? `×${m.weight} · ${T.waiting}`
-      : `×${m.weight} · ≈ ${count(Math.floor(can / m.weight), T.tokenForYou, T.tokensForYou)}`;
+      : !m.workers ? T.waiting
+      : `≈ ${count(Math.floor(can / m.weight), T.tokenForYou, T.tokensForYou)}`;
     pick.append(top, el("span", "info" + (pull && pull.error ? " bad" : ""), info));
     pick.onclick = () => { sel.value = m.id; picked = true; markModel(); };
 
@@ -401,13 +456,13 @@ function markModel() {
 }
 
 // Nothing that changes this machine is silent: say what it implies, then ask.
-// option is an optional checkbox; run receives whether it was ticked.
-function ask({ title, lines, option, yes, no, run, later }) {
+// option is an optional checkbox (ticked at first when checked is set); run receives whether it is ticked.
+function ask({ title, lines, option, checked, yes, no, run, later }) {
   $("cTitle").textContent = title;
   $("cList").replaceChildren(...lines.map(t => el("li", "", t)));
   $("cOpt").hidden = !option;
   $("cOptText").textContent = option || "";
-  $("cCheck").checked = false;
+  $("cCheck").checked = !!checked;
   $("cNo").textContent = no || T.cancel;
   $("cNo").onclick = () => { $("confirm").close(); if (later) later(); };
   $("cYes").textContent = yes;
@@ -429,7 +484,7 @@ function offerUpdate(s) {
   const u = s.update;
   $("upLink").hidden = !u;
   if (!u) return;
-  $("upLink").textContent = `${T.upLink} : ${u.version}`;
+  $("upLink").textContent = `${T.upLink} ${u.version}`;
   const open = () => ask({
     title: `${T.upTitle} ${u.version}`, lines: notesLines(u.notes), yes: T.upYes, no: T.upLater,
     later: () => { try { localStorage.setItem("skipUpdate", u.version); } catch {} },
@@ -460,7 +515,7 @@ function askShare(m, on, cap) {
   });
   else ask({
     title: `${T.unshare} ${m.name} ?`, yes: T.unshare,
-    lines: [T.cStop], option: `${T.cDelete} ${m.size_gb} Go`,
+    lines: [T.cStop], option: `${T.cDelete} ${m.size_gb} Go`, checked: true,
     run: del => post("/api/share", { model: m.id, on: false, delete: del })
   });
 }
@@ -493,7 +548,7 @@ async function refresh() {
 }
 
 $("power").addEventListener("click", async () => {
-  await fetch("/api/sharing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ on: !sharing }) });
+  await post("/api/sharing", { on: !sharing });
   refresh();
 });
 $("model").addEventListener("change", () => { picked = true; markModel(); });
@@ -521,7 +576,7 @@ $("form").addEventListener("submit", async e => {
   const out = bubble("bot", "…");
   const ctl = new AbortController();
   setBusy(ctl);
-  let answer = "", meta = "";
+  let answer = "", meta = [];
   try {
     const resp = await fetch("/v1/chat/completions", {
       method: "POST", signal: ctl.signal, headers: { "Content-Type": "application/json" },
@@ -544,8 +599,8 @@ $("form").addEventListener("submit", async e => {
         answer += j.choices[0].delta.content || "";
         out.innerHTML = render(answer);
         if (j.tor6ia) {
-          meta = j.tor6ia.local ? T.free : `−${num(j.tor6ia.cost)} ${T.cost}`;
-          if (j.choices[0].finish_reason === "length") meta += " · " + T.truncated;
+          meta = [j.tor6ia.local ? T.free : `−${num(j.tor6ia.cost)} ${T.cost}`];
+          if (j.choices[0].finish_reason === "length") meta.push(T.truncated);
         }
         $("log").scrollTop = $("log").scrollHeight;
       }
@@ -558,7 +613,7 @@ $("form").addEventListener("submit", async e => {
   }
   if (answer) {
     turns.push({ role: "assistant", content: answer });
-    if (meta) out.append(el("div", "meta", meta));
+    for (const line of meta) out.append(el("div", "meta", line));
   } else turns.pop(); // the question got no answer: do not resend it with the next one
   setBusy(null);
   refresh();

@@ -56,6 +56,7 @@ type Payload struct {
 type PollReq struct {
 	Models  []string `json:"models"`
 	XPub    []byte   `json:"xpub"`
+	XSig    []byte   `json:"xsig"` // the account's signature of XPub
 	Version string   `json:"version"`
 }
 
@@ -88,7 +89,8 @@ type NewJobReq struct {
 type NewJobResp struct {
 	ID         string `json:"id"`
 	WorkerXPub []byte `json:"worker_xpub"`
-	Worker     string `json:"worker"` // the account that will be paid
+	WorkerXSig []byte `json:"worker_xsig"` // proves WorkerXPub belongs to the account that is paid
+	Worker     string `json:"worker"`      // the account that will be paid
 	Weight     int64  `json:"weight"`
 	MaxTokens  int    `json:"max_tokens"`
 }
@@ -196,6 +198,19 @@ func verifyRequest(r *http.Request, body []byte) (string, error) {
 		return "", errors.New("bad signature")
 	}
 	return hex.EncodeToString(pub), nil
+}
+
+// xkeyMessage is what a machine signs with its account key to claim an encryption key.
+// The requester checks it: the only one who can read a job is the account paid for it,
+// so the coordinator cannot slip its own key in front of someone else's machine.
+func xkeyMessage(xpub []byte) []byte {
+	return []byte("tor6ia/xkey\n" + hex.EncodeToString(xpub))
+}
+
+// validWorkerKey tells whether a job offer's encryption key is signed by the account it pays.
+func validWorkerKey(nj NewJobResp) bool {
+	payee, err := hex.DecodeString(nj.Worker)
+	return err == nil && len(payee) == ed25519.PublicKeySize && ed25519.Verify(payee, xkeyMessage(nj.WorkerXPub), nj.WorkerXSig)
 }
 
 // jobKey derives the AES-GCM key shared by the requester and the worker of one job.

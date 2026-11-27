@@ -2,6 +2,24 @@
 
 Each `## vX.Y.Z` section becomes the notes of that release, and the text of the update window in the program.
 
+## v0.1.2
+
+**Français**
+- Nouveaux modèles : Gemma 4 en quatre tailles (E2B, 12B, 26B, 31B) remplace Llama 3.2 et Gemma 3. Les anciens ne sont plus proposés.
+- Une machine sans assez de mémoire pour un modèle ne le charge jamais.
+- Nouvelle interface : bloc d'état avec une ligne de pouls qui s'anime pendant un calcul, jauge de solde avec le zéro et le découvert.
+- Sécurité : la clé de chiffrement est signée par la machine payée. Le coordinateur ne peut plus intercepter une demande destinée à la machine de quelqu'un d'autre.
+- Le coordinateur limite le débit par adresse : une inondation de requêtes ne gêne plus les autres.
+- « Supprimer les fichiers » est coché par défaut quand tu arrêtes de partager un modèle.
+
+**English**
+- New models: Gemma 4 in four sizes (E2B, 12B, 26B, 31B) replaces Llama 3.2 and Gemma 3. The old ones are no longer offered.
+- A machine without enough memory for a model never loads it.
+- New interface: a state block with a pulse line that moves during a job, and a balance gauge showing zero and the overdraft.
+- Security: the encryption key is signed by the machine that is paid. The coordinator can no longer intercept a request meant for someone else's machine.
+- The coordinator limits the request rate per address: a flood no longer slows everyone else.
+- "Delete the files" is ticked by default when you stop sharing a model.
+
 ## v0.1.1
 
 **Français**

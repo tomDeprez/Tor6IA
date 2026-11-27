@@ -84,10 +84,12 @@ La liste des modèles montre combien de machines proposent chacun, son prix, et 
 
 | Modèle | Prix | Rapide sur | Lent sur |
 |---|---|---|---|
-| Llama 3.2 3B | ×1 | n'importe quel PC | |
-| Gemma 3 12B | ×4 | carte graphique 10 Go | processeur avec 13 Go de mémoire |
-| Gemma 3 27B | ×9 | carte graphique 20 Go | processeur avec 25 Go de mémoire |
-| Llama 3.3 70B | ×23 | 46 Go de mémoire graphique | processeur avec 58 Go de mémoire |
+| Gemma 4 E2B | ×1 | n'importe quel PC avec 8 Go de mémoire | |
+| Gemma 4 12B | ×4 | carte graphique 10 Go | processeur avec 13 Go de mémoire |
+| Gemma 4 26B | ×6 | carte graphique 22 Go | processeur avec 27 Go de mémoire |
+| Gemma 4 31B | ×10 | carte graphique 24 Go | processeur avec 29 Go de mémoire |
+
+Gemma 4 26B contient 26 milliards de paramètres et en utilise 4 par token : il répond bien plus vite que sa taille ne le laisse penser.
 
 Un nœud démarre avec le plus gros modèle que tient sa carte graphique. Une machine ne charge jamais un modèle pour lequel elle n'a pas la mémoire, et le calcul n'utilise que la moitié de ses processeurs : elle reste utilisable. Seules les cartes NVIDIA et les Mac Apple Silicon sont détectés automatiquement.
 
@@ -176,7 +178,7 @@ from openai import OpenAI
 
 client = OpenAI(base_url="http://localhost:7606/v1", api_key="unused")
 reply = client.chat.completions.create(
-    model="llama3.2:3b",
+    model="gemma4:e2b",
     messages=[{"role": "user", "content": "Bonjour !"}],
 )
 print(reply.choices[0].message.content)
@@ -199,7 +201,7 @@ Les nœuds ne reçoivent aucune connexion entrante : ils interrogent le coordina
 
 - **Un modèle tourne en entier sur une seule machine.** Tor6IA ne découpe pas encore un gros modèle entre plusieurs petites machines. Un modèle est disponible quand au moins une machine peut le tenir.
 - **La machine qui calcule lit ta question.** Elle ne sait pas de qui elle vient, mais n'envoie rien de secret.
-- **Le coordinateur reste un point de confiance pour trois choses.** Il attribue les machines : un coordinateur malveillant pourrait se faire passer pour une machine et lire les messages. Il compte les octets des réponses : ton nœud recompte ce qu'il paie, pas encore ce qu'il gagne. Il accorde les découverts : il pourrait en accorder à de faux comptes, mais chacun est plafonné à 200 et visible dans le registre.
+- **Le coordinateur reste un point de confiance pour trois choses.** Il attribue les machines : la clé de chiffrement est signée par le compte payé, donc il ne peut pas lire un job envoyé à la machine de quelqu'un d'autre, mais il pourrait envoyer ton job à une machine qu'il fait tourner lui-même. Il compte les octets des réponses : ton nœud recompte ce qu'il paie, pas encore ce qu'il gagne. Il accorde les découverts : il pourrait en accorder à de faux comptes, mais chacun est plafonné à 200 et visible dans le registre.
 - **Un compte peut partir avec sa dette.** Le découvert de 200 est le coût d'entrée du réseau. Le test par adresse IP le limite, plusieurs adresses le contournent.
 - **Le modèle annoncé n'est pas prouvé.** Les tests vérifient qu'une machine calcule vraiment, pas qu'elle fait tourner le modèle qu'elle annonce. Trois tests ratés excluent la machine une heure.
 - **Le registre est public.** Les comptes sont des clés anonymes, mais qui paie qui, et combien, se lit.

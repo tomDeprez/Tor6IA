@@ -84,10 +84,12 @@ The model list shows how many machines offer each model, its price, and how many
 
 | Model | Price | Runs fast on | Runs slowly on |
 |---|---|---|---|
-| Llama 3.2 3B | ×1 | any PC | |
-| Gemma 3 12B | ×4 | 10 GB graphics card | processor with 13 GB of memory |
-| Gemma 3 27B | ×9 | 20 GB graphics card | processor with 25 GB of memory |
-| Llama 3.3 70B | ×23 | 46 GB of graphics memory | processor with 58 GB of memory |
+| Gemma 4 E2B | ×1 | any PC with 8 GB of memory | |
+| Gemma 4 12B | ×4 | 10 GB graphics card | processor with 13 GB of memory |
+| Gemma 4 26B | ×6 | 22 GB graphics card | processor with 27 GB of memory |
+| Gemma 4 31B | ×10 | 24 GB graphics card | processor with 29 GB of memory |
+
+Gemma 4 26B holds 26 billion parameters and uses 4 billion per token: it answers much faster than its size suggests.
 
 A node starts with the largest model its graphics card holds. A machine never loads a model it has no memory for, and computing uses half of its processors, so it stays usable. Only NVIDIA cards and Apple Silicon are detected automatically.
 
@@ -128,7 +130,7 @@ from openai import OpenAI
 
 client = OpenAI(base_url="http://localhost:7606/v1", api_key="unused")
 reply = client.chat.completions.create(
-    model="llama3.2:3b",
+    model="gemma4:e2b",
     messages=[{"role": "user", "content": "Hello!"}],
 )
 print(reply.choices[0].message.content)
@@ -196,7 +198,7 @@ Automatic deploy gives GitHub Actions root access to the server. Use a dedicated
 
 - **One model runs whole on one machine.** Tor6IA does not yet split a large model across several small machines. A model is available when at least one machine can hold it.
 - **The machine that computes reads your prompt.** It does not know who you are, but do not send secrets.
-- **The coordinator is still trusted for three things.** It assigns machines: a malicious coordinator could pose as a machine and read messages. It counts answer bytes: your node recounts what it pays, not yet what it earns. It grants overdrafts: it could grant them to fake accounts, but each is capped at 200 and visible in the ledger.
+- **The coordinator is still trusted for three things.** It assigns machines: the encryption key is signed by the account that is paid, so it cannot read a job sent to someone else's machine, but it could send your job to a machine it runs itself. It counts answer bytes: your node recounts what it pays, not yet what it earns. It grants overdrafts: it could grant them to fake accounts, but each is capped at 200 and visible in the ledger.
 - **An account can leave with its debt.** The 200 overdraft is the entry cost of the network. The per-IP test limits it; several addresses get around it.
 - **The announced model is not proven.** Tests check that a machine really computes, not which model it runs. Three failed tests exclude it for an hour.
 - **The ledger is public.** Accounts are anonymous keys, but who pays whom, and how much, is readable.
