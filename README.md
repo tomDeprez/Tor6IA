@@ -96,9 +96,18 @@ A node starts with the heaviest model it runs fast. A machine never loads a mode
 
 A model with no machine shows "waiting for a machine". It becomes available the moment someone with enough hardware shares it.
 
-## Next: one model across several machines
+## One model across several machines
 
-Today a model runs whole on one machine. The [Tor6IA engine](https://github.com/tomDeprez/Tor6IA-engine) cuts a model into blocks of layers, so that several small machines carry a model none of them could hold alone. It is a separate project, at the proof stage: a 12B model split in two answers at 3.3 tokens per second on one machine, and still 1.9 with 50 ms of network delay each way. Tor6IA will use it as a second engine next to Ollama.
+A model too big for one machine can be shared by a group. The model is cut into blocks of layers; each machine of the group holds the blocks its memory allows, and yours offers the model to the network and is paid for it.
+
+1. On every other machine of the group, install the [Tor6IA engine](https://github.com/tomDeprez/Tor6IA-engine) and run `tor6ia-engine block --listen 0.0.0.0:50052`.
+2. In the interface, click **Spread a model over several machines…**, choose the model and give the addresses of those machines.
+
+<p align="center"><img src="docs/split.png" alt="The Tor6IA interface showing Gemma 4 26B split in three blocks, with the machine and the layers of each block" width="900"></p>
+
+The interface then shows the split: one bar for the model, one segment per block, and which machine holds which layers. If a machine of the group leaves, the model stops being split and the interface says so; your machine keeps offering it alone when it has the memory.
+
+**Only between machines you trust**, on a private network or a VPN: a block server has no login and no encryption. Groups of strangers formed by the network itself are the next step of the engine, not built yet. Measured on one laptop, Gemma 4 12B split in two answers at 3.3 tokens per second, and still 1.9 with 50 ms of network delay each way.
 
 ## Credits
 
@@ -201,7 +210,7 @@ Automatic deploy gives GitHub Actions root access to the server. Use a dedicated
 
 ## Known limits
 
-- **One model runs whole on one machine.** Splitting a large model across several small machines is the job of the [Tor6IA engine](https://github.com/tomDeprez/Tor6IA-engine), not yet plugged in. A model is available when at least one machine can hold it.
+- **The network does not form groups itself.** A model can be split across machines that trust each other, set up by hand. Across strangers, each model still runs whole on one machine.
 - **The machine that computes reads your prompt.** It does not know who you are, but do not send secrets.
 - **The coordinator is still trusted for three things.** It assigns machines: the encryption key is signed by the account that is paid, so it cannot read a job sent to someone else's machine, but it could send your job to a machine it runs itself. It counts answer bytes: your node recounts what it pays, not yet what it earns. It grants overdrafts: it could grant them to fake accounts, but each is capped at 200 and visible in the ledger.
 - **An account can leave with its debt.** The 200 overdraft is the entry cost of the network. The per-IP test limits it; several addresses get around it.
@@ -229,6 +238,7 @@ No dependency outside the Go standard library.
 | `coordinator.go` | job queue, test jobs, settlement |
 | `node.go` | computing for the network, local API, audit |
 | `ollama.go` | Ollama install, models, hardware detection |
+| `split.go` | a model across a group of machines, with the Tor6IA engine |
 | `ui/index.html` | interface |
 | `deploy.ps1`, `deploy/remote.sh` | coordinator deployment |
 

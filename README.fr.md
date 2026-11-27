@@ -96,9 +96,18 @@ Un nœud démarre avec le plus gros modèle qu'il fait tourner vite. Une machine
 
 Un modèle sans machine affiche « en attente d'une machine ». Il devient disponible dès que quelqu'un d'assez équipé le partage.
 
-## La suite : un modèle réparti sur plusieurs machines
+## Un modèle réparti sur plusieurs machines
 
-Aujourd'hui un modèle tourne en entier sur une seule machine. Le [moteur Tor6IA](https://github.com/tomDeprez/Tor6IA-engine) découpe un modèle en blocs de couches, pour que plusieurs petites machines portent ensemble un modèle qu'aucune ne tiendrait seule. C'est un projet séparé, au stade de la preuve : un modèle 12B coupé en deux répond à 3,3 tokens par seconde sur une machine, et encore 1,9 avec 50 ms de délai réseau dans chaque sens. Tor6IA l'utilisera comme second moteur à côté d'Ollama.
+Un modèle trop gros pour une machine peut être partagé par un groupe. Le modèle est coupé en blocs de couches ; chaque machine du groupe porte les blocs que sa mémoire permet, et la tienne propose le modèle au réseau et reçoit le paiement.
+
+1. Sur chaque autre machine du groupe, installe le [moteur Tor6IA](https://github.com/tomDeprez/Tor6IA-engine) et lance `tor6ia-engine block --listen 0.0.0.0:50052`.
+2. Dans l'interface, clique sur **Répartir un modèle sur plusieurs machines…**, choisis le modèle et donne les adresses de ces machines.
+
+<p align="center"><img src="docs/split.png" alt="L'interface de Tor6IA affichant Gemma 4 26B réparti en trois blocs, avec la machine et les couches de chaque bloc" width="900"></p>
+
+L'interface affiche alors le découpage : une barre pour le modèle, un segment par bloc, et quelle machine porte quelles couches. Si une machine du groupe s'en va, le modèle n'est plus réparti et l'interface le dit ; ta machine continue à le proposer seule si elle en a la mémoire.
+
+**Uniquement entre machines de confiance**, sur un réseau privé ou un VPN : un serveur de blocs n'a ni identification ni chiffrement. Les groupes d'inconnus formés par le réseau lui-même sont la prochaine étape du moteur, pas encore construite. Mesuré sur un portable, Gemma 4 12B coupé en deux répond à 3,3 tokens par seconde, et encore 1,9 avec 50 ms de délai réseau dans chaque sens.
 
 ## Les crédits
 
@@ -204,7 +213,7 @@ Les nœuds ne reçoivent aucune connexion entrante : ils interrogent le coordina
 
 ## Limites connues
 
-- **Un modèle tourne en entier sur une seule machine.** Découper un gros modèle entre plusieurs petites machines est le rôle du [moteur Tor6IA](https://github.com/tomDeprez/Tor6IA-engine), pas encore branché. Un modèle est disponible quand au moins une machine peut le tenir.
+- **Le réseau ne forme pas les groupes lui-même.** Un modèle peut être réparti entre des machines de confiance, réglées à la main. Entre inconnus, chaque modèle tourne encore en entier sur une seule machine.
 - **La machine qui calcule lit ta question.** Elle ne sait pas de qui elle vient, mais n'envoie rien de secret.
 - **Le coordinateur reste un point de confiance pour trois choses.** Il attribue les machines : la clé de chiffrement est signée par le compte payé, donc il ne peut pas lire un job envoyé à la machine de quelqu'un d'autre, mais il pourrait envoyer ton job à une machine qu'il fait tourner lui-même. Il compte les octets des réponses : ton nœud recompte ce qu'il paie, pas encore ce qu'il gagne. Il accorde les découverts : il pourrait en accorder à de faux comptes, mais chacun est plafonné à 200 et visible dans le registre.
 - **Un compte peut partir avec sa dette.** Le découvert de 200 est le coût d'entrée du réseau. Le test par adresse IP le limite, plusieurs adresses le contournent.
@@ -232,6 +241,7 @@ Aucune dépendance hors de la bibliothèque standard de Go.
 | `coordinator.go` | file des jobs, tests, règlement |
 | `node.go` | calcul pour le réseau, API locale, audit |
 | `ollama.go` | installation d'Ollama, modèles, détection du matériel |
+| `split.go` | un modèle réparti sur un groupe de machines, avec le moteur Tor6IA |
 | `ui/index.html` | interface |
 | `deploy.ps1`, `deploy/remote.sh` | déploiement du coordinateur |
 

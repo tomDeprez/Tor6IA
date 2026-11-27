@@ -2,6 +2,18 @@
 
 Each `## vX.Y.Z` section becomes the notes of that release, and the text of the update window in the program.
 
+## v0.2.0
+
+**Français**
+- Un modèle peut être réparti sur plusieurs machines de confiance : « Répartir un modèle sur plusieurs machines… ». Ta machine le propose au réseau et reçoit le paiement.
+- L'interface affiche le découpage : un segment par bloc, et quelle machine porte quelles couches.
+- Si une machine du groupe s'en va, l'interface le dit et ta machine continue seule si elle en a la mémoire.
+
+**English**
+- A model can be spread over several machines you trust: "Spread a model over several machines…". Your machine offers it to the network and is paid for it.
+- The interface shows the split: one segment per block, and which machine holds which layers.
+- If a machine of the group leaves, the interface says so and your machine goes on alone when it has the memory.
+
 ## v0.1.4
 
 **Français**

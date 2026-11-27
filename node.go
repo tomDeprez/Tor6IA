@@ -55,6 +55,10 @@ type Node struct {
 	alert      string       // proof that the coordinator cheated: never cleared
 	audited    *AuditStatus // last successful ledger audit
 	update     *Update      // a newer release, when there is one
+	catalog    []Model      // the network's models, as last read
+	split      *SplitStatus // the shared model runs across a group of machines
+	engineURL  string       // the engine's local API while a split is ready
+	stopEngine func()
 	cancelPoll context.CancelFunc
 }
 
@@ -210,6 +214,9 @@ func (n *Node) setup(ctx context.Context, want string) {
 	if want != "" {
 		list = []string{want}
 	}
+	n.mu.Lock()
+	n.catalog = net.Models
+	n.mu.Unlock()
 	offered := func(id string) int { return slices.IndexFunc(net.Models, func(m Model) bool { return m.ID == id }) }
 	if want != "" && offered(want) < 0 {
 		n.setPhase("error", 0, "this network does not offer the model "+want)
@@ -251,6 +258,13 @@ func (n *Node) setup(ctx context.Context, want string) {
 	n.saveModels()
 	log.Printf("ready: sharing %v", list)
 	n.setPhase("ready", 100, "")
+	// A group set up before the restart is formed again.
+	if raw, err := os.ReadFile(n.splitFile()); err == nil {
+		var cfg splitConfig
+		if json.Unmarshal(raw, &cfg) == nil && len(cfg.Machines) > 0 {
+			go n.startSplit(cfg)
+		}
+	}
 }
 
 // share makes id the model this machine offers. A machine offers one model at a time, so its
@@ -353,6 +367,12 @@ func (n *Node) handleShare(w http.ResponseWriter, r *http.Request) {
 		refuse(409, "the machine is not ready yet")
 		return
 	case !req.On:
+		n.mu.Lock()
+		grouped := n.split != nil && n.split.Model == req.Model
+		n.mu.Unlock()
+		if grouped {
+			n.stopSplit()
+		}
 		n.saveModels()
 		if left {
 			n.leave()
@@ -378,6 +398,7 @@ func (n *Node) handleShare(w http.ResponseWriter, r *http.Request) {
 			refuse(400, "this machine cannot run that model")
 			return
 		}
+		n.stopSplit() // the group ran the model this one replaces
 		go n.share(req.Model, req.Delete)
 	}
 	writeJSON(w, 200, map[string]bool{"ok": true})
@@ -393,6 +414,8 @@ func (n *Node) handleUninstall(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", 400)
 		return
 	}
+	n.stopSplit()
+	os.RemoveAll(filepath.Join(n.home, "engine")) // the engine program this node downloaded
 	n.mu.Lock()
 	models := n.models
 	n.models, n.sharing = nil, false
@@ -522,7 +545,7 @@ func (n *Node) runJob(ctx context.Context, job JobMsg) bool {
 		buf, last = buf[:0], time.Now()
 		return ok
 	}
-	res, err := ollamaChat(ctx, n.ollama, job.Model, pl, func(delta string) error {
+	res, err := n.runModel(ctx, job.Model, pl, func(delta string) error {
 		// The requester pays per byte up to MaxOutBytes. Stop exactly there, on a whole character:
 		// the coordinator drops any chunk that goes over.
 		if room := job.MaxOutBytes - sent - int64(len(buf)); int64(len(delta)) > room {
@@ -561,7 +584,7 @@ func (n *Node) hosts(model string) bool {
 // otherwise encrypted through the network, paid in credits.
 func (n *Node) chat(ctx context.Context, model string, pl Payload, onDelta func(string)) (Chunk, bool, error) {
 	if n.hosts(model) {
-		res, err := ollamaChat(ctx, n.ollama, model, pl, func(d string) error { onDelta(d); return nil })
+		res, err := n.runModel(ctx, model, pl, func(d string) error { onDelta(d); return nil })
 		return Chunk{Done: true, PromptTokens: res.PromptTokens, CompletionTokens: res.CompletionTokens, Truncated: res.Truncated}, true, err
 	}
 	// Failover: a machine that goes away before sending anything costs nothing, so another one is asked.
@@ -652,6 +675,7 @@ func (n *Node) Handler(hostport string) http.Handler {
 	mux.HandleFunc("GET /api/status", n.handleStatus)
 	mux.HandleFunc("POST /api/sharing", n.handleSharing)
 	mux.HandleFunc("POST /api/share", n.handleShare)
+	mux.HandleFunc("POST /api/split", n.handleSplit)
 	mux.HandleFunc("POST /api/uninstall", n.handleUninstall)
 	mux.HandleFunc("POST /api/update", n.handleUpdate)
 	mux.HandleFunc("GET /v1/models", n.handleModels)
@@ -685,6 +709,7 @@ type Status struct {
 	Alert       string            `json:"alert"`
 	Audit       *AuditStatus      `json:"audit"`
 	Update      *Update           `json:"update"`
+	Split       *SplitStatus      `json:"split"`
 	Account     *Account          `json:"account"`
 	Network     *Network          `json:"network"`
 }
@@ -697,6 +722,10 @@ func (n *Node) handleStatus(w http.ResponseWriter, r *http.Request) {
 	if n.pull != nil {
 		pull := *n.pull
 		s.Pull = &pull
+	}
+	if n.split != nil {
+		split := *n.split
+		s.Split = &split
 	}
 	n.mu.Unlock()
 	var me Me

@@ -354,3 +354,38 @@ func TestNewer(t *testing.T) {
 		}
 	}
 }
+
+// The engine answers like an OpenAI server: text in deltas, then the token counts.
+func TestEngineChat(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			MaxTokens int `json:"max_tokens"`
+			Stream    bool
+		}
+		json.NewDecoder(r.Body).Decode(&req)
+		if !req.Stream || req.MaxTokens != 7 {
+			http.Error(w, "bad request", 400)
+			return
+		}
+		for _, line := range []string{
+			`{"choices":[{"delta":{"role":"assistant","content":""},"finish_reason":null}]}`,
+			`{"choices":[{"delta":{"content":"Bon"},"finish_reason":null}]}`,
+			`{"choices":[{"delta":{"content":"jour"},"finish_reason":null}]}`,
+			`{"choices":[{"delta":{},"finish_reason":"length"}]}`,
+			`{"choices":[],"usage":{"prompt_tokens":12,"completion_tokens":7}}`,
+			`[DONE]`,
+		} {
+			io.WriteString(w, "data: "+line+"\n\n")
+		}
+	}))
+	defer srv.Close()
+	var got strings.Builder
+	res, err := engineChat(context.Background(), srv.URL, Payload{MaxTokens: 7, Messages: []Message{{Role: "user", Content: "hi"}}},
+		func(d string) error { got.WriteString(d); return nil })
+	if err != nil || got.String() != "Bonjour" || !res.Truncated || res.PromptTokens != 12 || res.CompletionTokens != 7 {
+		t.Fatalf("got %q %+v %v", got.String(), res, err)
+	}
+	if _, err := engineChat(context.Background(), srv.URL, Payload{MaxTokens: 1}, func(string) error { return nil }); err == nil {
+		t.Fatal("a refused request was reported as an answer")
+	}
+}

@@ -113,6 +113,19 @@
   form button { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 14px; padding: 0 22px;
     height: 50px; font: 700 17px var(--display); letter-spacing: .02em; cursor: pointer; }
 
+  /* The split: one bar for the model, one coloured segment per block, in layer order. */
+  .blocksBar { display: flex; height: 22px; border-radius: 7px; overflow: hidden; gap: 2px; margin: 10px 0; }
+  .blocksBar i { display: block; min-width: 4px; }
+  .blockRow { display: grid; grid-template-columns: 16px 1fr auto; gap: 8px; align-items: baseline; font-size: 13px; padding: 3px 0; }
+  .blockRow .chip { width: 12px; height: 12px; border-radius: 3px; align-self: center; }
+  .blockRow .where { overflow-wrap: anywhere; font-weight: 600; }
+  .blockRow .what2 { color: var(--soft); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .linkish { background: none; border: 0; padding: 0; color: var(--accent); font-size: 13px; font-weight: 600; cursor: pointer; text-align: left; margin-top: 10px; }
+  #splitDlg p { font-size: 14px; margin: 0 0 12px; }
+  #splitDlg label { display: block; margin: 0 0 12px; cursor: default; }
+  #splitDlg select, #splitDlg textarea { display: block; width: 100%; margin-top: 6px; flex: none; min-height: 0; }
+  #splitDlg textarea { min-height: 84px; font: 13px ui-monospace, Consolas, monospace; }
+  #splitDlg .warn { color: var(--debt); }
   dialog { background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 20px; padding: 26px; max-width: 460px; }
   dialog::backdrop { background: rgb(4 8 16 / .6); }
   dialog h3 { margin: 0 0 14px; font: 700 26px/1.1 var(--display); }
@@ -166,6 +179,15 @@
   <section>
     <h2 data-t="models"></h2>
     <div id="models"></div>
+    <button type="button" class="linkish" id="splitOpen" data-t="splitOpen"></button>
+  </section>
+
+  <section id="splitBox" hidden>
+    <h2 data-t="splitTitle"></h2>
+    <div class="note" id="splitState" style="margin:0"></div>
+    <div class="blocksBar" id="splitBar"></div>
+    <div id="splitRows"></div>
+    <button type="button" class="linkish" id="splitStop" data-t="splitStop"></button>
   </section>
 
   <section id="netBox">
@@ -210,6 +232,20 @@
   <div class="acts">
     <button type="button" id="cNo"></button>
     <button type="button" class="go" id="cYes"></button>
+  </div>
+</dialog>
+
+<dialog id="splitDlg" aria-labelledby="sTitle">
+  <h3 id="sTitle" data-t="splitAsk"></h3>
+  <p data-t="split1"></p>
+  <p><span data-t="split2"></span> <code>tor6ia-engine block --listen 0.0.0.0:50052</code></p>
+  <label><span data-t="splitModel"></span><select id="sModel"></select></label>
+  <label><span data-t="splitMachines"></span><textarea id="sMachines" placeholder="192.168.1.20:50052&#10;192.168.1.21:50052"></textarea></label>
+  <p class="warn" data-t="splitWarn"></p>
+  <p class="msg err" id="sError" hidden></p>
+  <div class="acts">
+    <button type="button" id="sNo" data-t="cancel"></button>
+    <button type="button" class="go" id="sYes" data-t="splitGo"></button>
   </div>
 </dialog>
 
@@ -261,6 +297,13 @@ const FR = {
   uDone: "Tor6IA est désinstallé. Tu peux fermer cet onglet.",
   upTitle: "Mise à jour disponible :", upYes: "Mettre à jour", upLater: "Plus tard", upLink: "Mise à jour disponible :",
   upDoing: "Mise à jour en cours, le programme redémarre…", upFailed: "La mise à jour a échoué :",
+  splitOpen: "Répartir un modèle sur plusieurs machines…", splitTitle: "Découpage du modèle", splitStop: "Arrêter le découpage",
+  splitAsk: "Répartir un modèle sur plusieurs machines", splitGo: "Répartir",
+  split1: "Le modèle est coupé en blocs de couches. Chaque machine du groupe en porte selon sa mémoire, et ta machine le propose au réseau. Tu peux ainsi partager un modèle trop gros pour une seule machine.",
+  split2: "Sur chaque autre machine du groupe, installe le moteur Tor6IA et lance :",
+  splitModel: "Modèle à répartir", splitMachines: "Adresses des machines, une par ligne",
+  splitWarn: "Uniquement des machines de confiance, sur un réseau privé ou un VPN : un serveur de blocs n'a ni mot de passe ni chiffrement.",
+  splitStarting: "Chargement sur le groupe :", splitReady: "réparti en", blockOne: "bloc", blockMany: "blocs", layers: "couches", to: "à",
   waiting: "Attend une machine assez puissante",
   insufficient_credits: "Pas assez de crédits. Laisse le partage activé : chaque calcul fait pour un autre t'en rapporte.",
   no_worker: "Personne ne propose ce modèle pour l'instant : il attend une machine assez puissante.", busy: "Toutes les machines sont occupées. Réessaie dans un instant.",
@@ -313,6 +356,13 @@ const EN = {
   uDone: "Tor6IA is uninstalled. You can close this tab.",
   upTitle: "Update available:", upYes: "Update", upLater: "Later", upLink: "Update available:",
   upDoing: "Updating, the program restarts…", upFailed: "The update failed:",
+  splitOpen: "Spread a model over several machines…", splitTitle: "Model split", splitStop: "Stop the split",
+  splitAsk: "Spread a model over several machines", splitGo: "Spread",
+  split1: "The model is cut into blocks of layers. Each machine of the group holds some, according to its memory, and your machine offers it to the network. This way you can share a model too big for a single machine.",
+  split2: "On every other machine of the group, install the Tor6IA engine and run:",
+  splitModel: "Model to spread", splitMachines: "Machine addresses, one per line",
+  splitWarn: "Only machines you trust, on a private network or a VPN: a block server has no password and no encryption.",
+  splitStarting: "Loading across the group:", splitReady: "split in", blockOne: "block", blockMany: "blocks", layers: "layers", to: "to",
   waiting: "Waits for a machine powerful enough",
   insufficient_credits: "Not enough credits. Keep sharing on: every job done for someone else earns some.",
   no_worker: "No one offers this model right now: it waits for a machine powerful enough.", busy: "All machines are busy. Try again in a moment.",
@@ -412,6 +462,7 @@ function paint(s) {
   $("acct").textContent = `${T.account} ${s.key.slice(0, 12)}…`;
   $("ver").textContent = `${T.version} ${s.version}`;
   offerUpdate(s);
+  paintSplit(s);
 
   $("nNodes").textContent = net ? num(net.workers) : "–";
   $("nJobs").textContent = net ? num(net.jobs_done) : "–";
@@ -463,6 +514,56 @@ function paint(s) {
   }));
   markModel();
 }
+
+// The split, as the engine reported it: which machine holds which layers.
+const blockColours = ["var(--s-idle)", "var(--s-work)", "var(--s-setup)", "var(--accent)", "var(--debt)", "var(--s-paused)"];
+function paintSplit(s) {
+  const sp = s.split;
+  $("splitBox").hidden = !sp;
+  $("splitOpen").hidden = !!sp || s.phase !== "ready";
+  if (!sp) return;
+  const state = $("splitState");
+  state.className = "note" + (sp.state === "error" ? " bad" : "");
+  state.style.color = sp.state === "error" ? "var(--bad)" : "";
+  state.textContent = sp.state === "error" ? sp.error
+    : sp.state === "starting" ? `${T.splitStarting} ${sp.model}, ${count(sp.machines.length, "machine", "machines")}…`
+    : `${sp.model} ${T.splitReady} ${count(sp.blocks.length, T.blockOne, T.blockMany)}`;
+  const blocks = sp.blocks || [];
+  $("splitBar").hidden = !blocks.length;
+  $("splitBar").replaceChildren(...blocks.map((b, i) => {
+    const seg = el("i");
+    seg.style.flex = `${Math.max(b.share, 1)} 0 0`;
+    seg.style.background = blockColours[i % blockColours.length];
+    return seg;
+  }));
+  $("splitRows").replaceChildren(...blocks.map((b, i) => {
+    const row = el("div", "blockRow"), chip = el("span", "chip");
+    chip.style.background = blockColours[i % blockColours.length];
+    row.append(chip, el("span", "where", b.machine), el("span", "what2", `${T.layers} ${b.first} ${T.to} ${b.last}, ${b.share} %`));
+    return row;
+  }));
+}
+
+$("splitOpen").addEventListener("click", () => {
+  const models = (last && last.network && last.network.models) || [];
+  $("sModel").replaceChildren(...models.map(m => new Option(`${m.name} (${m.size_gb} Go)`, m.id)));
+  $("sModel").value = models.length ? models[models.length - 1].id : "";
+  $("sError").hidden = true;
+  $("splitDlg").showModal();
+});
+$("sNo").addEventListener("click", () => $("splitDlg").close());
+$("sYes").addEventListener("click", async () => {
+  const machines = $("sMachines").value.split(/[\s,]+/).filter(Boolean);
+  const resp = await post("/api/split", { on: true, model: $("sModel").value, machines });
+  if (!resp.ok) {
+    $("sError").hidden = false;
+    $("sError").textContent = (await resp.json()).error;
+    return;
+  }
+  $("splitDlg").close();
+  refresh();
+});
+$("splitStop").addEventListener("click", async () => { await post("/api/split", { on: false }); refresh(); });
 
 function markModel() {
   for (const row of $("models").children) row.classList.toggle("sel", row.dataset.id === $("model").value);
