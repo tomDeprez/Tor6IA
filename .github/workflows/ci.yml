@@ -113,5 +113,9 @@ jobs:
           echo "$status"; cat node.log; exit 1
       - name: Ask the local model
         run: |
-          curl -fs -m 600 http://127.0.0.1:7606/v1/chat/completions -H 'Content-Type: application/json'             -d '{"model":"gemma4:e2b","max_tokens":20,"messages":[{"role":"user","content":"Say hello."}]}' | tee answer.json
+          # Ask the model this machine chose for itself: it depends on the runner's memory.
+          model=$(curl -fs http://127.0.0.1:7606/api/status | python3 -c 'import sys, json; print(json.load(sys.stdin)["hosted"][0])')
+          echo "model: $model"
+          curl -fs -m 600 http://127.0.0.1:7606/v1/chat/completions -H 'Content-Type: application/json' \
+            -d "{\"model\":\"$model\",\"max_tokens\":20,\"messages\":[{\"role\":\"user\",\"content\":\"Say hello.\"}]}" | tee answer.json
           grep -q '"content":"..' answer.json

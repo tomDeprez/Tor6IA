@@ -2,6 +2,18 @@
 
 Each `## vX.Y.Z` section becomes the notes of that release, and the text of the update window in the program.
 
+## v0.1.4
+
+**Français**
+- Llama 3.2 3B revient comme modèle léger, pour les machines de 6 à 8 Go de mémoire où Gemma 4 E2B ne tient pas.
+- La règle mémoire suit la mesure réelle : une machine ne propose plus un modèle qu'Ollama refuserait de charger.
+- Chaque machine démarre avec le plus gros modèle qu'elle fait tourner vite.
+
+**English**
+- Llama 3.2 3B is back as the light model, for machines with 6 to 8 GB of memory where Gemma 4 E2B does not fit.
+- The memory rule follows what was measured: a machine no longer offers a model Ollama would refuse to load.
+- Each machine starts with the heaviest model it runs fast.
+
 ## v0.1.3
 
 **Français**

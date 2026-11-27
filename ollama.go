@@ -281,15 +281,3 @@ func detectVRAMMB() int {
 	}
 	return 0
 }
-
-// pickModel chooses the biggest catalog model the machine can hold.
-func pickModel(catalog []Model, vramMB int) string {
-	best := ""
-	bestNeed := -1
-	for _, m := range catalog {
-		if m.MinVRAMMB <= vramMB && m.MinVRAMMB > bestNeed {
-			best, bestNeed = m.ID, m.MinVRAMMB
-		}
-	}
-	return best
-}

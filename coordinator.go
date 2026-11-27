@@ -30,11 +30,13 @@ const (
 	banTime         = time.Hour
 )
 
-// The catalog is one model family at four sizes, so that people compare like with like.
+// The catalog goes from a light model any machine can hold to the largest Gemma 4.
 // SizeGB is the real download size. Weight follows the work one token costs: gemma4:26b holds
 // 26 billion parameters but uses 4 billion per token, so it is priced below the dense 31b.
+// Models are listed from the lightest to the heaviest: a node picks the last one it runs fast.
 var defaultCatalog = []Model{
-	{ID: "gemma4:e2b", Name: "Gemma 4 E2B", Weight: 1, MinVRAMMB: 0, SizeGB: 4.6},
+	{ID: "llama3.2:3b", Name: "Llama 3.2 3B", Weight: 1, MinVRAMMB: 0, SizeGB: 2.0},
+	{ID: "gemma4:e2b", Name: "Gemma 4 E2B", Weight: 2, MinVRAMMB: 0, SizeGB: 4.6},
 	{ID: "gemma4:12b", Name: "Gemma 4 12B", Weight: 4, MinVRAMMB: 10000, SizeGB: 8.0},
 	{ID: "gemma4:26b", Name: "Gemma 4 26B", Weight: 6, MinVRAMMB: 22000, SizeGB: 18.7},
 	{ID: "gemma4:31b", Name: "Gemma 4 31B", Weight: 10, MinVRAMMB: 24000, SizeGB: 20.4},

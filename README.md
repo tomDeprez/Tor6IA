@@ -84,16 +84,21 @@ The model list shows how many machines offer each model, its price, and how many
 
 | Model | Price | Runs fast on | Runs slowly on |
 |---|---|---|---|
-| Gemma 4 E2B | ×1 | any PC with 8 GB of memory | |
-| Gemma 4 12B | ×4 | 10 GB graphics card | processor with 13 GB of memory |
-| Gemma 4 26B | ×6 | 22 GB graphics card | processor with 27 GB of memory |
-| Gemma 4 31B | ×10 | 24 GB graphics card | processor with 29 GB of memory |
+| Llama 3.2 3B | ×1 | any PC with 6 GB of memory | |
+| Gemma 4 E2B | ×2 | any PC with 10 GB of memory | |
+| Gemma 4 12B | ×4 | 10 GB graphics card | processor with 14 GB of memory |
+| Gemma 4 26B | ×6 | 22 GB graphics card | processor with 31 GB of memory |
+| Gemma 4 31B | ×10 | 24 GB graphics card | processor with 33 GB of memory |
 
 Gemma 4 26B holds 26 billion parameters and uses 4 billion per token: it answers much faster than its size suggests.
 
-A node starts with the largest model its graphics card holds. A machine never loads a model it has no memory for, and computing uses half of its processors, so it stays usable. Only NVIDIA cards and Apple Silicon are detected automatically.
+A node starts with the heaviest model it runs fast. A machine never loads a model it has no memory for, and computing uses half of its processors, so it stays usable. Only NVIDIA cards and Apple Silicon are detected automatically.
 
 A model with no machine shows "waiting for a machine". It becomes available the moment someone with enough hardware shares it.
+
+## Next: one model across several machines
+
+Today a model runs whole on one machine. The [Tor6IA engine](https://github.com/tomDeprez/Tor6IA-engine) cuts a model into blocks of layers, so that several small machines carry a model none of them could hold alone. It is a separate project, at the proof stage: a 12B model split in two answers at 3.3 tokens per second on one machine, and still 1.9 with 50 ms of network delay each way. Tor6IA will use it as a second engine next to Ollama.
 
 ## Credits
 
@@ -196,7 +201,7 @@ Automatic deploy gives GitHub Actions root access to the server. Use a dedicated
 
 ## Known limits
 
-- **One model runs whole on one machine.** Tor6IA does not yet split a large model across several small machines. A model is available when at least one machine can hold it.
+- **One model runs whole on one machine.** Splitting a large model across several small machines is the job of the [Tor6IA engine](https://github.com/tomDeprez/Tor6IA-engine), not yet plugged in. A model is available when at least one machine can hold it.
 - **The machine that computes reads your prompt.** It does not know who you are, but do not send secrets.
 - **The coordinator is still trusted for three things.** It assigns machines: the encryption key is signed by the account that is paid, so it cannot read a job sent to someone else's machine, but it could send your job to a machine it runs itself. It counts answer bytes: your node recounts what it pays, not yet what it earns. It grants overdrafts: it could grant them to fake accounts, but each is capped at 200 and visible in the ledger.
 - **An account can leave with its debt.** The 200 overdraft is the entry cost of the network. The per-IP test limits it; several addresses get around it.

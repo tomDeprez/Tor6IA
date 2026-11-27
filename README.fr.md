@@ -84,16 +84,21 @@ La liste des modèles montre combien de machines proposent chacun, son prix, et 
 
 | Modèle | Prix | Rapide sur | Lent sur |
 |---|---|---|---|
-| Gemma 4 E2B | ×1 | n'importe quel PC avec 8 Go de mémoire | |
-| Gemma 4 12B | ×4 | carte graphique 10 Go | processeur avec 13 Go de mémoire |
-| Gemma 4 26B | ×6 | carte graphique 22 Go | processeur avec 27 Go de mémoire |
-| Gemma 4 31B | ×10 | carte graphique 24 Go | processeur avec 29 Go de mémoire |
+| Llama 3.2 3B | ×1 | n'importe quel PC avec 6 Go de mémoire | |
+| Gemma 4 E2B | ×2 | n'importe quel PC avec 10 Go de mémoire | |
+| Gemma 4 12B | ×4 | carte graphique 10 Go | processeur avec 14 Go de mémoire |
+| Gemma 4 26B | ×6 | carte graphique 22 Go | processeur avec 31 Go de mémoire |
+| Gemma 4 31B | ×10 | carte graphique 24 Go | processeur avec 33 Go de mémoire |
 
 Gemma 4 26B contient 26 milliards de paramètres et en utilise 4 par token : il répond bien plus vite que sa taille ne le laisse penser.
 
-Un nœud démarre avec le plus gros modèle que tient sa carte graphique. Une machine ne charge jamais un modèle pour lequel elle n'a pas la mémoire, et le calcul n'utilise que la moitié de ses processeurs : elle reste utilisable. Seules les cartes NVIDIA et les Mac Apple Silicon sont détectés automatiquement.
+Un nœud démarre avec le plus gros modèle qu'il fait tourner vite. Une machine ne charge jamais un modèle pour lequel elle n'a pas la mémoire, et le calcul n'utilise que la moitié de ses processeurs : elle reste utilisable. Seules les cartes NVIDIA et les Mac Apple Silicon sont détectés automatiquement.
 
 Un modèle sans machine affiche « en attente d'une machine ». Il devient disponible dès que quelqu'un d'assez équipé le partage.
+
+## La suite : un modèle réparti sur plusieurs machines
+
+Aujourd'hui un modèle tourne en entier sur une seule machine. Le [moteur Tor6IA](https://github.com/tomDeprez/Tor6IA-engine) découpe un modèle en blocs de couches, pour que plusieurs petites machines portent ensemble un modèle qu'aucune ne tiendrait seule. C'est un projet séparé, au stade de la preuve : un modèle 12B coupé en deux répond à 3,3 tokens par seconde sur une machine, et encore 1,9 avec 50 ms de délai réseau dans chaque sens. Tor6IA l'utilisera comme second moteur à côté d'Ollama.
 
 ## Les crédits
 
@@ -199,7 +204,7 @@ Les nœuds ne reçoivent aucune connexion entrante : ils interrogent le coordina
 
 ## Limites connues
 
-- **Un modèle tourne en entier sur une seule machine.** Tor6IA ne découpe pas encore un gros modèle entre plusieurs petites machines. Un modèle est disponible quand au moins une machine peut le tenir.
+- **Un modèle tourne en entier sur une seule machine.** Découper un gros modèle entre plusieurs petites machines est le rôle du [moteur Tor6IA](https://github.com/tomDeprez/Tor6IA-engine), pas encore branché. Un modèle est disponible quand au moins une machine peut le tenir.
 - **La machine qui calcule lit ta question.** Elle ne sait pas de qui elle vient, mais n'envoie rien de secret.
 - **Le coordinateur reste un point de confiance pour trois choses.** Il attribue les machines : la clé de chiffrement est signée par le compte payé, donc il ne peut pas lire un job envoyé à la machine de quelqu'un d'autre, mais il pourrait envoyer ton job à une machine qu'il fait tourner lui-même. Il compte les octets des réponses : ton nœud recompte ce qu'il paie, pas encore ce qu'il gagne. Il accorde les découverts : il pourrait en accorder à de faux comptes, mais chacun est plafonné à 200 et visible dans le registre.
 - **Un compte peut partir avec sa dette.** Le découvert de 200 est le coût d'entrée du réseau. Le test par adresse IP le limite, plusieurs adresses le contournent.

@@ -84,23 +84,36 @@ type PullStatus struct {
 }
 
 // capacity says how this machine would run a model: "fast" on its graphics card, or on the
-// processor for the base model; "slow" on the processor for a larger one; "no" when the
+// processor for a model made for it; "slow" on the processor for a larger one; "no" when the
 // memory is not there. It is what keeps a machine from loading a model that would freeze it.
 func (n *Node) capacity(m Model) string {
-	// Memory needed on the processor: the model, working memory, and room left for the system.
-	onCPU, need := "slow", m.SizeGB*1300+2000
+	onCPU := "slow"
 	if m.MinVRAMMB == 0 {
-		onCPU, need = "fast", m.SizeGB*1150+1000 // the base model is made for processors and small machines
+		onCPU = "fast" // made for processors
 	}
+	// Measured: Ollama asks 6.9 GiB of free memory to run the 4.6 GB gemma4:e2b, 1.5 times its file.
+	// The system keeps 2 GB.
+	need := m.SizeGB*1500 + 2000
 	switch {
 	case m.MinVRAMMB > 0 && m.MinVRAMMB <= n.vramMB:
 		return "fast"
 	case n.ramMB == 0 && m.MinVRAMMB == 0:
-		return onCPU // memory size unknown: let the base model try
+		return onCPU // memory size unknown: let a light model try, Ollama refuses what does not fit
 	case float64(n.ramMB) >= need:
 		return onCPU
 	}
 	return "no"
+}
+
+// bestModel is the heaviest model of the catalog this machine runs fast, "" when there is none.
+func (n *Node) bestModel(catalog []Model) string {
+	best := ""
+	for _, m := range catalog {
+		if n.capacity(m) == "fast" {
+			best = m.ID
+		}
+	}
+	return best
 }
 
 func (n *Node) modelsFile() string { return filepath.Join(n.home, "models.json") }
@@ -207,13 +220,16 @@ func (n *Node) setup(ctx context.Context, want string) {
 	if len(list) > 1 {
 		list = list[len(list)-1:] // lists from before "one model per machine": keep the last one chosen
 	}
-	if len(list) == 0 {
-		list = []string{pickModel(net.Models, n.vramMB)}
+	if len(list) == 1 && want == "" && n.capacity(net.Models[offered(list[0])]) == "no" {
+		list = nil // the saved model no longer fits this machine: choose again
 	}
-	if i := offered(list[0]); want == "" && n.capacity(net.Models[i]) == "no" {
-		need := int(net.Models[i].SizeGB*1.15 + 1 + 0.99)
-		n.setPhase("error", 0, fmt.Sprintf("this machine has too little memory to share a model: %d GB are needed", need))
-		return
+	if len(list) == 0 {
+		best := n.bestModel(net.Models)
+		if best == "" {
+			n.setPhase("error", 0, fmt.Sprintf("this machine has too little memory to share a model: %d GB are needed", int(net.Models[0].SizeGB*1.5+2.99)))
+			return
+		}
+		list = []string{best}
 	}
 
 	n.setPhase("ollama", 0, "")
