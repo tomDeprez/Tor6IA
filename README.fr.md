@@ -49,6 +49,10 @@ Le gros bouton en haut dit ce que fait ta machine. Un clic met le partage en pau
 
 La liste des modèles montre combien de machines proposent chacun, son prix, et combien de tokens ton solde permet. **Partager** propose un modèle de plus depuis ta machine. Le bouton demande toujours confirmation et dit ce que ça implique : taille du téléchargement, vitesse sur ton matériel, ce que tu gagnes.
 
+**Partagé ✓** arrête de partager un modèle, et peut supprimer ses fichiers pour libérer le disque. Un téléchargement en cours s'annule. **Désinstaller Tor6IA…**, en bas, retire tout : la machine quitte le réseau, les modèles partagés et le programme sont supprimés. Quand une machine se met en pause ou s'en va, les autres voient aussitôt qu'il manque une machine pour ses modèles.
+
+**Mises à jour.** Quand une nouvelle version est publiée, le programme montre ce qui change et se met à jour en un clic. Une version compilée depuis le code ne demande jamais.
+
 ## Les modèles
 
 | Modèle | Prix | Rapide sur | Lent sur |
@@ -124,6 +128,8 @@ Compile ensuite les clients pour ton réseau :
 git tag v0.2.0 && git push origin v0.2.0
 ```
 
+Les notes de version sont la section `## v0.2.0` de `CHANGELOG.md`, à écrire avant le tag. Les programmes installés les affichent dans leur fenêtre de mise à jour.
+
 Configuration du dépôt (Settings, Secrets and variables, Actions) :
 
 | Nom | Type | Rôle |
@@ -174,6 +180,10 @@ Les nœuds ne reçoivent aucune connexion entrante : ils interrogent le coordina
 - **Le modèle annoncé n'est pas prouvé.** Les tests vérifient qu'une machine calcule vraiment, pas qu'elle fait tourner le modèle qu'elle annonce. Trois tests ratés excluent la machine une heure.
 - **Le registre est public.** Les comptes sont des clés anonymes, mais qui paie qui, et combien, se lit.
 - **Un job à la fois par machine.** Les demandes attendent 30 secondes au plus une machine libre.
+
+## Licence
+
+[MIT](LICENSE)
 
 ## Développer
 

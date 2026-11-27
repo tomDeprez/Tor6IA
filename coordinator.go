@@ -141,6 +141,7 @@ func (c *Coordinator) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/me", c.auth(c.handleMe))
 	mux.HandleFunc("POST /v1/worker/poll", c.auth(c.handlePoll))
 	mux.HandleFunc("POST /v1/worker/jobs/{id}/chunks", c.auth(c.handleChunk))
+	mux.HandleFunc("POST /v1/worker/leave", c.auth(c.handleLeave))
 	mux.HandleFunc("POST /v1/jobs", c.auth(c.handleNewJob))
 	mux.HandleFunc("POST /v1/jobs/{id}/start", c.auth(c.handleStart))
 	return mux
@@ -325,6 +326,20 @@ func (c *Coordinator) handlePoll(rw http.ResponseWriter, r *http.Request, key st
 		return
 	}
 	writeJSON(rw, 200, msg)
+}
+
+// handleLeave removes a machine at once, so that everyone sees right away which models lost a machine.
+// Without it the machine is only dropped a few seconds after its last poll.
+func (c *Coordinator) handleLeave(rw http.ResponseWriter, r *http.Request, key string, _ []byte) {
+	c.mu.Lock()
+	if w := c.workers[key]; w != nil {
+		if w.job != nil {
+			c.failLocked(w.job, "the machine left the network", Chunk{})
+		}
+		delete(c.workers, key)
+	}
+	c.mu.Unlock()
+	rw.WriteHeader(200)
 }
 
 func (c *Coordinator) handleChunk(rw http.ResponseWriter, r *http.Request, key string, body []byte) {

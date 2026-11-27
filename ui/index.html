@@ -54,10 +54,11 @@
   .balance { font: 300 48px/1 "Segoe UI", system-ui, sans-serif; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
   .sub { color: var(--soft); font-size: 13px; margin-top: 8px; font-variant-numeric: tabular-nums; }
   #models { display: flex; flex-direction: column; gap: 6px; }
-  .model { border: 1px solid var(--line); border-radius: 10px; display: flex; align-items: stretch; line-height: 1.35; }
+  .model { border: 1px solid var(--line); border-radius: 10px; position: relative; line-height: 1.35; }
   .model.sel { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
-  .model .pick { flex: 1; min-width: 0; text-align: left; background: none; border: 0; padding: 7px 4px 7px 12px; cursor: pointer; border-radius: 10px; }
-  .model .share { flex: none; align-self: center; margin-right: 8px; font-size: 12px; padding: 4px 9px; border-radius: 999px;
+  .model .pick { width: 100%; text-align: left; background: none; border: 0; padding: 8px 12px; cursor: pointer; border-radius: 10px; }
+  /* The share button sits on the second line, to the right of the text it must not cover. */
+  .model .share { position: absolute; right: 8px; bottom: 7px; font-size: 12px; padding: 3px 9px; border-radius: 999px;
     border: 1px solid var(--line); background: none; cursor: pointer; white-space: nowrap; }
   .model .share.on { border-color: var(--accent); color: var(--accent); }
   .model .share:disabled { opacity: .5; cursor: default; }
@@ -66,14 +67,17 @@
   dialog::backdrop { background: rgb(0 0 0 / .55); }
   dialog h3 { margin: 0 0 12px; font: 400 22px/1.2 Georgia, "Iowan Old Style", serif; }
   dialog ul { margin: 0 0 20px; padding-left: 18px; display: grid; gap: 8px; font-size: 14px; }
+  dialog label { display: flex; gap: 8px; align-items: baseline; font-size: 14px; margin: 0 0 20px; cursor: pointer; }
+  dialog label[hidden] { display: none; }
+  .foot button { background: none; border: 0; padding: 0; margin-top: 10px; color: var(--soft); font-size: 12px; text-decoration: underline; cursor: pointer; }
   dialog .acts { display: flex; justify-content: flex-end; gap: 10px; }
   dialog .acts button { border-radius: 10px; padding: 9px 16px; cursor: pointer; border: 1px solid var(--line); background: none; }
   dialog .acts .go { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
   .model .top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
-  .model .name { font-weight: 600; }
+  .model .name { font-weight: 600; white-space: nowrap; }
   .model .count { font-size: 12.5px; font-variant-numeric: tabular-nums; color: var(--accent); white-space: nowrap; }
   .model .count.none { color: var(--soft); }
-  .model .info { font-size: 12.5px; color: var(--soft); display: block; }
+  .model .info { font-size: 12.5px; color: var(--soft); display: block; padding-right: 92px; min-height: 26px; }
   dl { margin: 0; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 13px; }
   dt { color: var(--soft); } dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
   .foot { margin-top: auto; font-size: 12px; color: var(--soft); }
@@ -149,6 +153,8 @@
     <div data-t="api"></div>
     <code id="apiUrl"></code>
     <div style="margin-top:8px" id="acct"></div>
+    <button type="button" id="upLink" hidden></button>
+    <button type="button" id="uninstall" data-t="uninstall"></button>
   </div>
 </aside>
 
@@ -169,6 +175,7 @@
 <dialog id="confirm" aria-labelledby="cTitle">
   <h3 id="cTitle"></h3>
   <ul id="cList"></ul>
+  <label id="cOpt" hidden><input type="checkbox" id="cCheck"> <span id="cOptText"></span></label>
   <div class="acts">
     <button type="button" id="cNo"></button>
     <button type="button" class="go" id="cYes"></button>
@@ -196,7 +203,7 @@ const FR = {
   verified: "vérifié", entry: "écriture", entries: "écritures", checking: "vérification…",
   local: "local, gratuit", free: "calculé sur ta machine · gratuit", cost: "crédits",
   insufficient_credits: "Pas assez de crédits. Laisse le partage activé : chaque calcul fait pour un autre t'en rapporte.",
-  share: "Partager", shared: "Partagé ✓", unshare: "Ne plus partager", tooSmall: "Machine trop petite", cancel: "Annuler",
+  share: "Partager", shared: "Partagé ✓", unshare: "Ne plus partager", tooSmall: "Trop gros", cancel: "Annuler",
   downloading: "téléchargement",
   cDownload: "Téléchargement, si le modèle n'est pas déjà sur ta machine :",
   cSlow: "Ta machine n'a pas de carte graphique assez grande pour ce modèle. Il tournera sur le processeur : réponses lentes, machine très sollicitée pendant un calcul.",
@@ -204,8 +211,20 @@ const FR = {
   cStay: "Ta machine reste connectée pendant le téléchargement. Le modèle est proposé au réseau dès qu'il est prêt, sans rien relancer.",
   cEarn: "Gain par token calculé pour les autres :",
   cStop: "Ta machine ne proposera plus ce modèle au réseau. Un calcul en cours se termine.",
-  cFiles: "Les fichiers restent sur ton disque : le partager à nouveau sera immédiat.",
-  waitAny: "en attente d'une machine", waitGpu: "en attente d'une machine avec carte graphique",
+  cDelete: "Supprimer aussi les fichiers de mon disque. Espace libéré :",
+  cancelDl: "Annuler le téléchargement", keepDl: "Continuer",
+  cCancel1: "Le téléchargement s'arrête tout de suite.",
+  cCancel2: "Ce qui est déjà téléchargé est repris si tu relances le partage de ce modèle.",
+  uninstall: "Désinstaller Tor6IA…", uYes: "Désinstaller",
+  u1: "Ta machine quitte le réseau. Les autres voient aussitôt qu'il manque une machine pour tes modèles.",
+  u2: "Tes modèles partagés sont supprimés du disque. Espace libéré :",
+  u3: "Le programme et ses raccourcis sont supprimés.",
+  u4: "Ollama reste installé : retire-le depuis les paramètres de ton système si tu ne t'en sers pas.",
+  uForget: "Supprimer aussi mon compte. Solde perdu :",
+  uDone: "Tor6IA est désinstallé. Tu peux fermer cet onglet.",
+  upTitle: "Mise à jour disponible :", upYes: "Mettre à jour", upLater: "Plus tard", upLink: "Mise à jour disponible",
+  upDoing: "Mise à jour en cours, le programme redémarre…", upFailed: "La mise à jour a échoué :",
+  waiting: "attend une machine assez puissante",
   no_worker: "Personne ne propose ce modèle pour l'instant : il attend une machine assez puissante.", busy: "Toutes les machines sont occupées. Réessaie dans un instant.",
   truncated: "réponse coupée (limite atteinte)", failed: "Erreur"
 };
@@ -229,7 +248,7 @@ const EN = {
   verified: "verified", entry: "entry", entries: "entries", checking: "checking…",
   local: "local, free", free: "computed on your machine · free", cost: "credits",
   insufficient_credits: "Not enough credits. Keep sharing on: every job done for someone else earns some.",
-  share: "Share", shared: "Shared ✓", unshare: "Stop sharing", tooSmall: "Machine too small", cancel: "Cancel",
+  share: "Share", shared: "Shared ✓", unshare: "Stop sharing", tooSmall: "Too big", cancel: "Cancel",
   downloading: "downloading",
   cDownload: "Download, if the model is not on your machine yet:",
   cSlow: "Your machine has no graphics card large enough for this model. It will run on the processor: slow answers, and a very busy machine during a job.",
@@ -237,8 +256,20 @@ const EN = {
   cStay: "Your machine stays connected during the download. The model is offered to the network as soon as it is ready, with nothing to restart.",
   cEarn: "Earnings per token computed for others:",
   cStop: "Your machine will no longer offer this model to the network. A running job finishes.",
-  cFiles: "The files stay on your disk: sharing it again will be immediate.",
-  waitAny: "waiting for a machine", waitGpu: "waiting for a machine with a graphics card of",
+  cDelete: "Also delete the files from my disk. Space freed:",
+  cancelDl: "Cancel the download", keepDl: "Continue",
+  cCancel1: "The download stops at once.",
+  cCancel2: "What is already downloaded is reused if you share this model again.",
+  uninstall: "Uninstall Tor6IA…", uYes: "Uninstall",
+  u1: "Your machine leaves the network. The others see at once that your models lost a machine.",
+  u2: "Your shared models are deleted from the disk. Space freed:",
+  u3: "The program and its shortcuts are deleted.",
+  u4: "Ollama stays installed: remove it from your system settings if you do not use it.",
+  uForget: "Also delete my account. Balance lost:",
+  uDone: "Tor6IA is uninstalled. You can close this tab.",
+  upTitle: "Update available:", upYes: "Update", upLater: "Later", upLink: "Update available",
+  upDoing: "Updating, the program restarts…", upFailed: "The update failed:",
+  waiting: "waits for a machine powerful enough",
   no_worker: "No one offers this model right now: it waits for a machine powerful enough.", busy: "All machines are busy. Try again in a moment.",
   truncated: "answer cut (limit reached)", failed: "Error"
 };
@@ -251,7 +282,7 @@ const count = (n, one, many) => `${num(n)} ${n === 1 ? one : many}`;
 $("input").placeholder = T.placeholder;
 $("apiUrl").textContent = location.origin + "/v1";
 
-let turns = [], busy = null, catalogSig = "", picked = false, sharing = true;
+let turns = [], busy = null, catalogSig = "", picked = false, sharing = true, last = null, timer = 0;
 
 // Model output is untrusted: escape first, then allow only code blocks, inline code and bold.
 function render(text) {
@@ -299,6 +330,7 @@ function nodeState(s) {
 function paint(s) {
   const a = s.account, net = s.network;
   sharing = s.sharing;
+  last = s;
   const [state, what, why, pct] = nodeState(s);
   $("power").dataset.state = state;
   $("power").setAttribute("aria-pressed", s.sharing);
@@ -311,7 +343,8 @@ function paint(s) {
   $("balance").textContent = a ? num(a.balance) : "–";
   $("flows").textContent = a ? `+${num(a.earned)} ${T.earned} · −${num(a.spent)} ${T.spent}` : "";
   $("spend").textContent = s.solo ? T.solo : !a ? "" : `${T.canSpend} : ${num(Math.max(a.spendable, 0))}` + (a.vouched ? "" : `. ${T.notVouched}`);
-  $("acct").textContent = `${T.account} ${s.key.slice(0, 12)}…`;
+  $("acct").textContent = `${T.account} ${s.key.slice(0, 12)}… · ${s.version}`;
+  offerUpdate(s);
 
   $("nNodes").textContent = net ? num(net.workers) : "–";
   $("nJobs").textContent = net ? num(net.jobs_done) : "–";
@@ -344,9 +377,8 @@ function paint(s) {
     const top = el("span", "top");
     top.append(el("span", "name", m.name),
       el("span", "count" + (m.workers ? "" : " none"), m.workers ? `${num(m.workers)} ${T.online}` : T.noOne));
-    const need = m.min_vram_mb ? `${T.waitGpu} ${Math.round(m.min_vram_mb / 1000)} Go` : T.waitAny;
     const info = pull ? (pull.error || `${T.downloading} ${Math.floor(pull.pct)} %`) : hosted ? T.mine
-      : !m.workers ? `×${m.weight} · ${need}`
+      : !m.workers ? `×${m.weight} · ${T.waiting}`
       : `×${m.weight} · ≈ ${count(Math.floor(can / m.weight), T.tokenForYou, T.tokensForYou)}`;
     pick.append(top, el("span", "info" + (pull && pull.error ? " bad" : ""), info));
     pick.onclick = () => { sel.value = m.id; picked = true; markModel(); };
@@ -354,10 +386,10 @@ function paint(s) {
     // Right: offer this model from this machine. Always confirmed first.
     const downloading = pull && !pull.error;
     const share = el("button", "share" + (hosted ? " on" : ""),
-      hosted ? T.shared : downloading ? "…" : cap === "no" ? T.tooSmall : T.share);
+      hosted ? T.shared : downloading ? T.cancel : cap === "no" ? T.tooSmall : T.share);
     share.type = "button";
-    share.disabled = downloading || s.phase !== "ready" || (!hosted && cap === "no");
-    share.onclick = () => askShare(m, !hosted, cap);
+    share.disabled = s.phase !== "ready" || (!hosted && !downloading && cap === "no");
+    share.onclick = () => downloading ? askCancel(m) : askShare(m, !hosted, cap);
     row.append(pick, share);
     return row;
   }));
@@ -368,23 +400,93 @@ function markModel() {
   for (const row of $("models").children) row.classList.toggle("sel", row.dataset.id === $("model").value);
 }
 
-// Changing what the machine offers is never silent: say what it implies, then ask.
-function askShare(m, on, cap) {
-  $("cTitle").textContent = `${on ? T.share : T.unshare} ${m.name} ?`;
-  const lines = on
-    ? [`${T.cDownload} ${m.size_gb} Go`, cap === "slow" ? T.cSlow : T.cFast, T.cStay, `${T.cEarn} ×${m.weight}`]
-    : [T.cStop, T.cFiles];
+// Nothing that changes this machine is silent: say what it implies, then ask.
+// option is an optional checkbox; run receives whether it was ticked.
+function ask({ title, lines, option, yes, no, run, later }) {
+  $("cTitle").textContent = title;
   $("cList").replaceChildren(...lines.map(t => el("li", "", t)));
-  $("cNo").textContent = T.cancel;
-  $("cYes").textContent = on ? T.share : T.unshare;
-  $("cYes").onclick = async () => {
-    $("confirm").close();
-    await fetch("/api/share", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: m.id, on }) });
-    refresh();
-  };
+  $("cOpt").hidden = !option;
+  $("cOptText").textContent = option || "";
+  $("cCheck").checked = false;
+  $("cNo").textContent = no || T.cancel;
+  $("cNo").onclick = () => { $("confirm").close(); if (later) later(); };
+  $("cYes").textContent = yes;
+  $("cYes").onclick = async () => { $("confirm").close(); await run($("cCheck").checked); refresh(); };
   $("confirm").showModal();
 }
-$("cNo").addEventListener("click", () => $("confirm").close());
+
+// The release notes hold a French and an English list: keep the one of this interface.
+function notesLines(notes) {
+  const parts = notes.split(/^\*\*(Français|English)\*\*\s*$/m);
+  const at = parts.indexOf(T === FR ? "Français" : "English");
+  const text = at < 0 ? notes : parts[at + 1];
+  return text.split("\n").map(l => l.replace(/^\s*[-*#]+\s*/, "").trim()).filter(Boolean);
+}
+
+// A new release opens one window per version. "Later" leaves a link at the bottom of the column.
+let offered = "";
+function offerUpdate(s) {
+  const u = s.update;
+  $("upLink").hidden = !u;
+  if (!u) return;
+  $("upLink").textContent = `${T.upLink} : ${u.version}`;
+  const open = () => ask({
+    title: `${T.upTitle} ${u.version}`, lines: notesLines(u.notes), yes: T.upYes, no: T.upLater,
+    later: () => { try { localStorage.setItem("skipUpdate", u.version); } catch {} },
+    run: async () => {
+      const resp = await post("/api/update", {});
+      if (!resp.ok) { $("alert").hidden = false; $("alert").textContent = `${T.upFailed} ${(await resp.json()).error}`; return; }
+      clearInterval(timer);
+      document.body.replaceChildren(el("div", "empty", T.upDoing));
+      // The new version takes over the same address: reload once it answers.
+      const wait = setInterval(async () => {
+        try { if ((await (await fetch("/api/status")).json()).version === u.version) { clearInterval(wait); location.reload(); } } catch {}
+      }, 1000);
+    }
+  });
+  $("upLink").onclick = open;
+  let skipped = "";
+  try { skipped = localStorage.getItem("skipUpdate") || ""; } catch {}
+  if (offered !== u.version && skipped !== u.version && !$("confirm").open) { offered = u.version; open(); }
+}
+
+const post = (path, body) => fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+
+function askShare(m, on, cap) {
+  if (on) ask({
+    title: `${T.share} ${m.name} ?`, yes: T.share,
+    lines: [`${T.cDownload} ${m.size_gb} Go`, cap === "slow" ? T.cSlow : T.cFast, T.cStay, `${T.cEarn} ×${m.weight}`],
+    run: () => post("/api/share", { model: m.id, on: true })
+  });
+  else ask({
+    title: `${T.unshare} ${m.name} ?`, yes: T.unshare,
+    lines: [T.cStop], option: `${T.cDelete} ${m.size_gb} Go`,
+    run: del => post("/api/share", { model: m.id, on: false, delete: del })
+  });
+}
+
+function askCancel(m) {
+  ask({
+    title: `${T.cancelDl} ${m.name} ?`, yes: T.cancelDl, no: T.keepDl, lines: [T.cCancel1, T.cCancel2],
+    run: () => post("/api/share", { model: m.id, on: false })
+  });
+}
+
+$("uninstall").addEventListener("click", () => {
+  const hosted = (last && last.hosted) || [], models = (last && last.network && last.network.models) || [];
+  const freed = models.filter(m => hosted.includes(m.id)).reduce((sum, m) => sum + m.size_gb, 0);
+  const balance = last && last.account ? last.account.balance : 0;
+  ask({
+    title: `${T.uYes} Tor6IA ?`, yes: T.uYes,
+    lines: [T.u1, `${T.u2} ${num(Math.round(freed * 10) / 10)} Go`, T.u3, T.u4],
+    option: `${T.uForget} ${num(balance)}`,
+    run: async forget => {
+      await post("/api/uninstall", { forget });
+      clearInterval(timer);
+      document.body.replaceChildren(el("div", "empty", T.uDone));
+    }
+  });
+});
 
 async function refresh() {
   try { paint(await (await fetch("/api/status")).json()); } catch {}
@@ -465,7 +567,7 @@ $("form").addEventListener("submit", async e => {
 setBusy(null);
 showEmpty();
 refresh();
-setInterval(refresh, 2000);
+timer = setInterval(refresh, 2000);
 </script>
 </body>
 </html>

@@ -181,6 +181,21 @@ func pullModel(ctx context.Context, base, model string, progress func(pct float6
 	}
 }
 
+// deleteModel removes a model's files from the disk.
+func deleteModel(ctx context.Context, base, model string) error {
+	body, _ := json.Marshal(map[string]string{"model": model})
+	req, _ := http.NewRequestWithContext(ctx, "DELETE", base+"/api/delete", bytes.NewReader(body))
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 200 && resp.StatusCode != 404 { // 404: already gone
+		return errors.New("ollama: " + resp.Status)
+	}
+	return nil
+}
+
 type chatResult struct {
 	PromptTokens, CompletionTokens int
 	Truncated                      bool

@@ -82,3 +82,26 @@ func copyFile(from, to string) error {
 	}
 	return dst.Close()
 }
+
+// removeProgram deletes the installed program and its shortcuts. A running exe cannot delete
+// itself on Windows, so a detached command removes the folder a moment after we exit.
+func removeProgram() {
+	exe, err := os.Executable()
+	dir := filepath.Join(os.Getenv("LOCALAPPDATA"), "Tor6IA")
+	if err != nil || os.Getenv("LOCALAPPDATA") == "" || !strings.EqualFold(filepath.Dir(exe), dir) {
+		return // not the installed copy: the install, if any, belongs to another run
+	}
+	for _, folder := range []string{`Microsoft\Windows\Start Menu\Programs`, `Microsoft\Windows\Start Menu\Programs\Startup`} {
+		os.Remove(filepath.Join(os.Getenv("APPDATA"), folder, "Tor6IA.lnk"))
+	}
+	cmd := exec.Command("cmd", "/c", "ping -n 3 127.0.0.1 >nul & rmdir /s /q \""+dir+"\"")
+	cmd.Dir = os.Getenv("LOCALAPPDATA")
+	detach(cmd)
+	cmd.Start()
+}
+
+// ownWindow gives a restarted copy its own console window: ours closes when we exit.
+func ownWindow(cmd *exec.Cmd) {
+	const newConsole = 0x00000010
+	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: newConsole}
+}

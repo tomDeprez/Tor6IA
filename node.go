@@ -46,6 +46,7 @@ type Node struct {
 	warn       string
 	models     []string    // offered to the network, all on disk
 	pull       *PullStatus // a model being added
+	stopPull   context.CancelFunc
 	vramMB     int
 	ramMB      int
 	sharing    bool
@@ -53,6 +54,7 @@ type Node struct {
 	served     int
 	alert      string       // proof that the coordinator cheated: never cleared
 	audited    *AuditStatus // last successful ledger audit
+	update     *Update      // a newer release, when there is one
 	cancelPoll context.CancelFunc
 }
 
@@ -221,15 +223,25 @@ func (n *Node) setup(ctx context.Context, want string) {
 
 // share adds a model to the ones this machine offers. It downloads it first when needed;
 // the machine stays connected meanwhile and the new model is announced at the next poll.
-func (n *Node) share(ctx context.Context, id string) {
+func (n *Node) share(id string) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	progress := func(pct float64, problem string) {
 		n.mu.Lock()
 		n.pull = &PullStatus{Model: id, Pct: pct, Error: problem}
 		n.mu.Unlock()
 	}
-	progress(0, "")
+	n.mu.Lock()
+	n.pull, n.stopPull = &PullStatus{Model: id}, cancel
+	n.mu.Unlock()
 	if !hasModel(ctx, n.ollama, id) {
 		if err := pullModel(ctx, n.ollama, id, func(pct float64) { progress(pct, "") }); err != nil {
+			if ctx.Err() != nil { // the user cancelled: nothing to report
+				n.mu.Lock()
+				n.pull = nil
+				n.mu.Unlock()
+				return
+			}
 			log.Printf("share %s: %v", id, err)
 			progress(0, err.Error())
 			return
@@ -246,6 +258,16 @@ func (n *Node) share(ctx context.Context, id string) {
 	log.Printf("now sharing %s", id)
 }
 
+// leave tells the coordinator that this machine stops computing, so that the model
+// counts everyone sees are right at once.
+func (n *Node) leave() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if resp, err := n.call(ctx, "POST", "/v1/worker/leave", nil); err == nil {
+		resp.Body.Close()
+	}
+}
+
 // repollLocked restarts the current poll so that the coordinator learns the new model list now.
 func (n *Node) repollLocked() {
 	if n.cancelPoll != nil {
@@ -253,10 +275,13 @@ func (n *Node) repollLocked() {
 	}
 }
 
+// handleShare changes what this machine offers: share a model, stop sharing it (and optionally
+// delete its files), or cancel its download.
 func (n *Node) handleShare(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Model string `json:"model"`
-		On    bool   `json:"on"`
+		Model  string `json:"model"`
+		On     bool   `json:"on"`
+		Delete bool   `json:"delete"` // with on=false: also remove the files from the disk
 	}
 	refuse := func(status int, msg string) { writeJSON(w, status, map[string]string{"error": msg}) }
 	if json.NewDecoder(io.LimitReader(r.Body, 1024)).Decode(&req) != nil {
@@ -267,9 +292,19 @@ func (n *Node) handleShare(w http.ResponseWriter, r *http.Request) {
 	ready := n.phase == "ready"
 	hosted := slices.Contains(n.models, req.Model)
 	pulling := n.pull != nil && n.pull.Error == ""
-	if ready && !req.On && hosted {
-		n.models = slices.DeleteFunc(slices.Clone(n.models), func(id string) bool { return id == req.Model })
-		n.repollLocked()
+	left := false
+	if ready && !req.On {
+		if n.pull != nil && n.pull.Model == req.Model {
+			if n.stopPull != nil {
+				n.stopPull() // cancels the download; share() clears the status
+			}
+			n.pull = nil
+		}
+		if hosted {
+			n.models = slices.DeleteFunc(slices.Clone(n.models), func(id string) bool { return id == req.Model })
+			n.repollLocked()
+			left = len(n.models) == 0
+		}
 	}
 	n.mu.Unlock()
 	switch {
@@ -278,6 +313,15 @@ func (n *Node) handleShare(w http.ResponseWriter, r *http.Request) {
 		return
 	case !req.On:
 		n.saveModels()
+		if left {
+			n.leave()
+		}
+		if req.Delete {
+			if err := deleteModel(r.Context(), n.ollama, req.Model); err != nil {
+				refuse(502, "the files could not be deleted: "+err.Error())
+				return
+			}
+		}
 	case hosted:
 	case pulling:
 		refuse(409, "another model is being downloaded")
@@ -293,9 +337,53 @@ func (n *Node) handleShare(w http.ResponseWriter, r *http.Request) {
 			refuse(400, "this machine cannot run that model")
 			return
 		}
-		go n.share(context.Background(), req.Model)
+		go n.share(req.Model)
 	}
 	writeJSON(w, 200, map[string]bool{"ok": true})
+}
+
+// handleUninstall removes Tor6IA from this machine: it leaves the network, deletes the shared
+// models, the program and its shortcuts, then stops. The account is kept unless forget is set.
+func (n *Node) handleUninstall(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Forget bool `json:"forget"`
+	}
+	if json.NewDecoder(io.LimitReader(r.Body, 1024)).Decode(&req) != nil {
+		http.Error(w, "bad request", 400)
+		return
+	}
+	n.mu.Lock()
+	models := n.models
+	n.models, n.sharing = nil, false
+	if n.stopPull != nil {
+		n.stopPull()
+	}
+	n.repollLocked()
+	n.mu.Unlock()
+	n.leave()
+	var failed []string
+	for _, id := range models {
+		if err := deleteModel(r.Context(), n.ollama, id); err != nil {
+			log.Printf("uninstall: %s not deleted: %v", id, err)
+			failed = append(failed, id)
+		}
+	}
+	// Only files Tor6IA created are removed, by name: the folder may be one the user chose.
+	names := []string{"models.json", "checkpoint.json"}
+	if req.Forget {
+		names = append(names, "identity.key")
+		os.RemoveAll(filepath.Join(n.home, "solo"))
+	}
+	for _, name := range names {
+		os.Remove(filepath.Join(n.home, name))
+	}
+	os.Remove(n.home) // succeeds only when nothing is left in it
+	writeJSON(w, 200, map[string]any{"ok": true, "not_deleted": failed})
+	go func() {
+		time.Sleep(time.Second) // let the answer reach the browser
+		removeProgram()
+		os.Exit(0)
+	}()
 }
 
 // workLoop asks the coordinator for jobs while sharing is on.
@@ -442,7 +530,8 @@ func (n *Node) chat(ctx context.Context, model string, pl Payload, onDelta func(
 		var started bool
 		final, started, err = n.chatRemote(ctx, model, pl, onDelta)
 		var refused *apiError
-		if err == nil || started || errors.As(err, &refused) || ctx.Err() != nil {
+		// unknown_job: the reserved machine left before the job started, so nothing was spent either.
+		if err == nil || started || ctx.Err() != nil || (errors.As(err, &refused) && refused.Code != "unknown_job") {
 			break
 		}
 		log.Printf("machine failed before answering (%v): asking another one", err)
@@ -516,6 +605,8 @@ func (n *Node) Handler(hostport string) http.Handler {
 	mux.HandleFunc("GET /api/status", n.handleStatus)
 	mux.HandleFunc("POST /api/sharing", n.handleSharing)
 	mux.HandleFunc("POST /api/share", n.handleShare)
+	mux.HandleFunc("POST /api/uninstall", n.handleUninstall)
+	mux.HandleFunc("POST /api/update", n.handleUpdate)
 	mux.HandleFunc("GET /v1/models", n.handleModels)
 	mux.HandleFunc("POST /v1/chat/completions", n.handleChat)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -546,6 +637,7 @@ type Status struct {
 	Served      int               `json:"served"`
 	Alert       string            `json:"alert"`
 	Audit       *AuditStatus      `json:"audit"`
+	Update      *Update           `json:"update"`
 	Account     *Account          `json:"account"`
 	Network     *Network          `json:"network"`
 }
@@ -554,7 +646,7 @@ func (n *Node) handleStatus(w http.ResponseWriter, r *http.Request) {
 	n.mu.Lock()
 	s := Status{Version: version, Key: n.id.Key(), Coordinator: n.coord, Solo: n.solo, Phase: n.phase, Pct: n.pct,
 		Detail: n.detail, Warn: n.warn, Hosted: slices.Clone(n.models), Sharing: n.sharing, Working: n.working, Served: n.served,
-		Alert: n.alert, Audit: n.audited}
+		Alert: n.alert, Audit: n.audited, Update: n.update}
 	if n.pull != nil {
 		pull := *n.pull
 		s.Pull = &pull
@@ -643,6 +735,9 @@ func (n *Node) handleSharing(w http.ResponseWriter, r *http.Request) {
 		n.cancelPoll() // leave the queue now; a job already running is finished
 	}
 	n.mu.Unlock()
+	if !req.On {
+		n.leave()
+	}
 	writeJSON(w, 200, map[string]bool{"sharing": req.On})
 }
 

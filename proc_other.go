@@ -32,3 +32,13 @@ func detach(cmd *exec.Cmd) {
 
 // selfInstall is for Windows, where people double-click a download. Elsewhere install.sh installs.
 func selfInstall() bool { return false }
+
+// removeProgram deletes the program installed by install.sh.
+func removeProgram() {
+	if exe, err := os.Executable(); err == nil && strings.HasSuffix(exe, "/.local/bin/tor6ia") {
+		os.Remove(exe)
+	}
+}
+
+// ownWindow lets a restarted copy live on after we exit.
+func ownWindow(cmd *exec.Cmd) { detach(cmd) }

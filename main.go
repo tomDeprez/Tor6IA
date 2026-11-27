@@ -19,7 +19,9 @@ import (
 	"time"
 )
 
-var version = "0.1.0"
+// version is "dev" for a build from source. Releases set it: -ldflags "-X main.version=1.2.3".
+// A dev build never offers to update itself.
+var version = "dev"
 
 // defaultCoordinator is set at build time: -ldflags "-X main.defaultCoordinator=https://..."
 // Empty means solo mode: the node runs its own private coordinator.
@@ -83,7 +85,15 @@ func runNode(args []string) error {
 	}
 	hostport := "127.0.0.1:" + strconv.Itoa(*port)
 	url := "http://" + hostport
+	restarted := os.Getenv("T6_RESTART") != "" // we replace a copy of ourselves that is still closing
+	if exe, err := os.Executable(); err == nil {
+		os.Remove(exe + ".old") // left behind by an update
+	}
 	ln, err := net.Listen("tcp", hostport)
+	for i := 0; err != nil && restarted && i < 40; i++ {
+		time.Sleep(250 * time.Millisecond)
+		ln, err = net.Listen("tcp", hostport)
+	}
 	if err != nil {
 		if isTor6IA(url) {
 			fmt.Println("Tor6IA is already running:", url)
@@ -115,6 +125,7 @@ func runNode(args []string) error {
 	go n.setup(ctx, *model)
 	go n.workLoop(ctx)
 	go n.auditLoop(ctx)
+	go n.updateLoop(ctx)
 
 	fmt.Println("Tor6IA", version)
 	fmt.Println("  interface   ", url)
@@ -125,7 +136,7 @@ func runNode(args []string) error {
 		fmt.Println("  network     ", *coord)
 	}
 	fmt.Println("  account     ", id.Key()[:16]+"…")
-	if !*noBrowser {
+	if !*noBrowser && !restarted {
 		openBrowser(url)
 	}
 	return http.Serve(ln, n.Handler(hostport))

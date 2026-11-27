@@ -17,11 +17,20 @@ import (
 	"time"
 )
 
+// deletedModel is the last model the fake Ollama was asked to delete.
+var deletedModel atomic.Value
+
 // fakeOllama answers /api/chat by echoing the last message word by word.
 // Setting failNext makes the next call fail, like a machine whose model crashed.
 func fakeOllama(t *testing.T) (string, *atomic.Bool) {
 	failNext := new(atomic.Bool)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/delete" {
+			var req struct{ Model string }
+			json.NewDecoder(r.Body).Decode(&req)
+			deletedModel.Store(req.Model)
+			return
+		}
 		if failNext.CompareAndSwap(true, false) {
 			http.Error(w, "model crashed", 500)
 			return
@@ -251,6 +260,21 @@ func TestNetwork(t *testing.T) {
 		t.Fatalf("short download: audit said %v, want errIncomplete", err)
 	}
 
+	// The user stops sharing its only model and deletes it: the files go, and the machine leaves the
+	// network at once, so everyone sees that the model lost a machine.
+	resp, err = http.Post(local.URL+"/api/share", "application/json", strings.NewReader(`{"model":"small","on":false,"delete":true}`))
+	if err != nil || resp.StatusCode != 200 {
+		t.Fatalf("unshare: %v %v", err, resp)
+	}
+	resp.Body.Close()
+	c.mu.Lock()
+	_, stillThere := c.workers[uk]
+	smallMachines := c.networkLocked().Models[1].Workers
+	c.mu.Unlock()
+	if deletedModel.Load() != "small" || user.hosts("small") || stillThere || smallMachines != 0 {
+		t.Fatalf("unshare: deleted=%v hosts=%v worker listed=%v machines=%d", deletedModel.Load(), user.hosts("small"), stillThere, smallMachines)
+	}
+
 	// Another website cannot use the local API.
 	req, _ := http.NewRequest("GET", local.URL+"/api/status", nil)
 	req.Header.Set("Origin", "https://evil.example")
@@ -302,5 +326,19 @@ func TestCryptoAndSignature(t *testing.T) {
 	}
 	if _, err := open(kb, dirResponse, 4, "job2", sealed); err == nil {
 		t.Fatal("chunk accepted for another job")
+	}
+}
+
+func TestNewer(t *testing.T) {
+	for _, c := range []struct {
+		tag, current string
+		want         bool
+	}{
+		{"v0.1.1", "0.1.0", true}, {"v0.2.0", "0.1.9", true}, {"v1.0.0", "0.9.9", true}, {"v0.10.0", "0.9.0", true},
+		{"v0.1.0", "0.1.0", false}, {"v0.1.0", "0.1.1", false}, {"v0.1.1", "dev", false}, {"latest", "0.1.0", false},
+	} {
+		if got := newer(c.tag, c.current); got != c.want {
+			t.Errorf("newer(%q, %q) = %v, want %v", c.tag, c.current, got, c.want)
+		}
 	}
 }

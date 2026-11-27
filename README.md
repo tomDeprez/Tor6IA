@@ -3,6 +3,7 @@
 [![CI](https://github.com/tomDeprez/Tor6IA/actions/workflows/ci.yml/badge.svg)](https://github.com/tomDeprez/Tor6IA/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/tomDeprez/Tor6IA)](https://github.com/tomDeprez/Tor6IA/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/tomDeprez/Tor6IA/total)](https://github.com/tomDeprez/Tor6IA/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 **Tor6IA is a peer-to-peer network for running open LLMs.** Your machine runs a model for other people and earns credits. You spend those credits on the models other machines run, including models too large for your own computer.
 
@@ -55,6 +56,10 @@ The large button at the top says what your machine is doing. Click it to pause o
 | Red | Problem, or alert: the ledger failed its audit |
 
 The model list shows how many machines offer each model, its price, and how many tokens your balance buys. **Share** offers one more model from your machine. It always asks first and says what it implies: download size, speed on your hardware, what you earn.
+
+**Shared ✓** stops sharing a model, and can delete its files to free the disk. A download in progress can be cancelled. **Uninstall Tor6IA…** at the bottom removes everything: the machine leaves the network, the shared models and the program are deleted. When a machine pauses or leaves, the others see at once that its models lost a machine.
+
+**Updates.** When a new release is published, the program shows what changed and updates itself in one click. A build from source never asks.
 
 ## Models
 
@@ -157,6 +162,8 @@ Then build the clients for your network:
 git tag v0.2.0 && git push origin v0.2.0
 ```
 
+The release notes are the `## v0.2.0` section of `CHANGELOG.md`, written before tagging. Installed programs show them in their update window.
+
 Repository settings (Settings, Secrets and variables, Actions):
 
 | Name | Kind | Role |
@@ -178,6 +185,10 @@ Automatic deploy gives GitHub Actions root access to the server. Use a dedicated
 - **The announced model is not proven.** Tests check that a machine really computes, not which model it runs. Three failed tests exclude it for an hour.
 - **The ledger is public.** Accounts are anonymous keys, but who pays whom, and how much, is readable.
 - **One job at a time per machine.** Requests wait at most 30 seconds for a free machine.
+
+## License
+
+[MIT](LICENSE)
 
 ## Develop
 
