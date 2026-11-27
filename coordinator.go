@@ -108,6 +108,15 @@ type Coordinator struct {
 	bytesOut   int64
 	waiting    map[string]int // per model, requests that have no machine yet
 
+	// Models held in blocks (chain.go).
+	HoldersPerBlock int                       // machines each block needs before a chain is formed
+	Relay           string                    // host:port of the relay, told to every machine
+	Blocks          map[string]int            // blocks per model, read from its plan
+	PlanOf          func(string) (int, error) // reads that plan
+	planTried       map[string]time.Time
+	blockNodes      map[string]*blockNode // machines that hold blocks or offer to be a head
+	chains          map[string]*group     // per model
+
 	rateMu     sync.Mutex
 	rate       map[string]*bucket // every request, per address
 	ledgerRate map[string]*bucket // ledger downloads, which are large
@@ -167,6 +176,13 @@ func newCoordinator(dataDir string) (*Coordinator, error) {
 		jobs:         map[string]*job{},
 		held:         map[string]int64{},
 		lastCanary:   map[string]time.Time{},
+
+		HoldersPerBlock: 2,
+		Blocks:          map[string]int{},
+		PlanOf:          enginePlan(dataDir),
+		planTried:       map[string]time.Time{},
+		blockNodes:      map[string]*blockNode{},
+		chains:          map[string]*group{},
 	}, nil
 }
 
@@ -189,6 +205,7 @@ func (c *Coordinator) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/worker/poll", c.auth(c.handlePoll))
 	mux.HandleFunc("POST /v1/worker/jobs/{id}/chunks", c.auth(c.handleChunk))
 	mux.HandleFunc("POST /v1/worker/leave", c.auth(c.handleLeave))
+	mux.HandleFunc("POST /v1/blocks", c.auth(c.handleBlocks))
 	mux.HandleFunc("POST /v1/jobs", c.auth(c.handleNewJob))
 	mux.HandleFunc("POST /v1/jobs/{id}/start", c.auth(c.handleStart))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -271,10 +288,29 @@ func (c *Coordinator) model(id string) *Model {
 func (c *Coordinator) networkLocked() Network {
 	n := Network{Models: slices.Clone(c.Catalog), JobsDone: c.jobsDone, TokensOut: c.bytesOut / 4, LedgerKey: c.ledger.id.Key()}
 	n.LedgerSeq, n.Circulating = c.ledger.summary()
-	for i := range n.Models {
-		n.Models[i].Waiting = c.waiting[n.Models[i].ID]
-	}
+	n.HoldersPerBlock, n.Relay = c.HoldersPerBlock, c.Relay
 	now := time.Now()
+	for i := range n.Models {
+		m := &n.Models[i]
+		m.Waiting = c.waiting[m.ID]
+		m.Blocks = c.Blocks[m.ID]
+		_, m.Chained = c.chains[m.ID]
+		var holds []*Hold
+		for _, b := range c.blockNodes {
+			if now.Sub(b.seen) > blocksAlive {
+				continue
+			}
+			if b.hold != nil && b.hold.Model == m.ID {
+				holds = append(holds, b.hold)
+			}
+			if b.head == m.ID {
+				m.Heads++
+			}
+		}
+		if m.Blocks > 0 && len(holds) > 0 {
+			m.Cover = cover(holds, m.Blocks)
+		}
+	}
 	for _, w := range c.workers {
 		if !w.alive(now) || now.Before(w.bannedUntil) {
 			continue
@@ -705,6 +741,7 @@ func (c *Coordinator) sweep() {
 			delete(c.lastCanary, ip)
 		}
 	}
+	c.chainsLocked() // a machine that went silent leaves its chain
 	for _, w := range c.workers {
 		if w.job != nil || w.waiter == nil || len(w.models) == 0 || now.Before(w.bannedUntil) {
 			continue

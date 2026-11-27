@@ -22,7 +22,8 @@ import (
 // blocks and nothing else. The block server runs locked in: it cannot read the user's files,
 // connect anywhere or start a program.
 
-// holdListen is where the block server listens, so that the other machines of the group reach it.
+// holdListen is where the engine listens for the other machines of the group. When another
+// program has that port, the system chooses one.
 const holdListen = "0.0.0.0:50052"
 
 // HoldStatus is what the interface shows of the blocks this machine holds.
@@ -135,16 +136,39 @@ func (n *Node) startHold(cfg holdConfig) {
 		fail(err.Error())
 		return
 	}
+	// With the network's relay, a head that cannot reach this machine directly still finds it.
+	var network Network
+	n.callJSON(context.Background(), "GET", "/v1/network", nil, &network)
+	// The usual port first. When another program has it, the system chooses one.
+	for _, listen := range []string{holdListen, "0.0.0.0:0"} {
+		problem, stopped := n.runHold(engine, cfg, listen, network.Relay, set)
+		if stopped {
+			return
+		}
+		if listen == holdListen && strings.Contains(problem, "bind:") {
+			continue
+		}
+		fail("the block server stopped: " + problem)
+		return
+	}
+}
+
+// runHold runs the engine's block server until it stops. It returns its last words, and whether
+// it was stopped on purpose.
+func (n *Node) runHold(engine string, cfg holdConfig, listen, relay string, set func(func(*HoldStatus))) (string, bool) {
 	// --exit-with-stdin: the block server stops if this program dies, nothing is left running.
-	cmd := exec.Command(engine, "block", "--model", cfg.Model, "--blocks", fmt.Sprintf("%d-%d", cfg.First, cfg.Last),
-		"--listen", holdListen, "--json", "--exit-with-stdin")
+	args := []string{"block", "--model", cfg.Model, "--blocks", fmt.Sprintf("%d-%d", cfg.First, cfg.Last),
+		"--listen", listen, "--json", "--exit-with-stdin"}
+	if relay != "" {
+		args = append(args, "--relay", relay)
+	}
+	cmd := exec.Command(engine, args...)
 	stdin, _ := cmd.StdinPipe()
 	stdout, _ := cmd.StdoutPipe()
 	var said bytes.Buffer
 	cmd.Stderr = &said
 	if err := cmd.Start(); err != nil {
-		fail("the engine did not start: " + err.Error())
-		return
+		return "the engine did not start: " + err.Error(), false
 	}
 	done := make(chan struct{})
 	defer close(done)
@@ -181,9 +205,7 @@ func (n *Node) startHold(cfg holdConfig) {
 	stopped := n.stopHold == nil // stopped on purpose
 	n.stopHold = nil
 	n.mu.Unlock()
-	if !stopped {
-		fail("the block server stopped: " + lastLine(said.String()))
-	}
+	return lastLine(said.String()), stopped
 }
 
 func (n *Node) endHold() {

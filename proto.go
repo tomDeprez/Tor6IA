@@ -40,6 +40,11 @@ type Model struct {
 	Workers   int     `json:"workers"`
 	Busy      int     `json:"busy"`    // machines of this model that are computing right now
 	Waiting   int     `json:"waiting"` // requests waiting for a machine of this model
+	// For a model held in blocks by several machines:
+	Blocks  int   `json:"blocks,omitempty"`  // how many blocks it has, once known
+	Cover   []int `json:"cover,omitempty"`   // how many machines hold each block
+	Heads   int   `json:"heads,omitempty"`   // machines that offer to hold its conversations
+	Chained bool  `json:"chained,omitempty"` // a chain of machines offers it now
 }
 
 type Message struct {
@@ -125,6 +130,9 @@ type Network struct {
 	LedgerSeq uint64  `json:"ledger_seq"`
 	// Circulating is the sum of the positive balances. Negative balances mirror it exactly.
 	Circulating int64 `json:"circulating"`
+	// HoldersPerBlock is how many machines must hold each block before a chain is formed.
+	HoldersPerBlock int    `json:"holders_per_block"`
+	Relay           string `json:"relay,omitempty"` // host:port that joins machines unable to reach each other
 }
 
 type Me struct {

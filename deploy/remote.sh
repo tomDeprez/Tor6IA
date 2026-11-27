@@ -1,10 +1,13 @@
 #!/bin/bash
-# Runs on the server as root, called by deploy.ps1. Installs or updates the Tor6IA coordinator.
-# It only adds its own files, user and service: no existing site or service is modified.
+# Runs on the server as root, called by deploy.ps1. Installs or updates the Tor6IA coordinator,
+# and with a relay port the relay that joins machines unable to reach each other.
+# It only adds its own files, user and services: no existing site or service is modified.
 # The coordinator serves HTTPS itself on its own port, so its many long-lived connections
 # never use the web server's workers.
 set -euo pipefail
-DOMAIN=$1 PORT=$2 NEW=$3
+DOMAIN=$1 PORT=$2 NEW=$3 RELAY_PORT=${4:-0} ENGINE_URL=${5:-} ENGINE_SHA=${6:-}
+RELAY_FLAG=
+[ "$RELAY_PORT" != 0 ] && RELAY_FLAG=" --relay $DOMAIN:$RELAY_PORT"
 
 if ss -ltnpH "sport = :$PORT" | grep -v '"tor6ia"' | grep -q .; then
   echo "port $PORT is already used by another program" >&2
@@ -36,7 +39,7 @@ Wants=network-online.target
 
 [Service]
 User=tor6ia
-ExecStart=/opt/tor6ia/tor6ia coordinator --addr :$PORT --data /var/lib/tor6ia --tls-cert /var/lib/tor6ia/tls/fullchain.pem --tls-key /var/lib/tor6ia/tls/privkey.pem
+ExecStart=/opt/tor6ia/tor6ia coordinator --addr :$PORT --data /var/lib/tor6ia --tls-cert /var/lib/tor6ia/tls/fullchain.pem --tls-key /var/lib/tor6ia/tls/privkey.pem$RELAY_FLAG
 Restart=always
 RestartSec=2
 LimitNOFILE=65536
@@ -62,8 +65,56 @@ LockPersonality=true
 WantedBy=multi-user.target
 EOF
 
+if [ "$RELAY_PORT" != 0 ]; then
+  if ss -ltnpH "sport = :$RELAY_PORT" | grep -v '"tor6ia-engine"' | grep -q .; then
+    echo "port $RELAY_PORT is already used by another program" >&2
+    exit 1
+  fi
+  # The relay is the engine, taken from its release and checked against the checksum Tor6IA pins.
+  curl -fsSL --max-time 120 -o /opt/tor6ia/tor6ia-engine.new "$ENGINE_URL"
+  echo "$ENGINE_SHA  /opt/tor6ia/tor6ia-engine.new" | sha256sum -c --quiet -
+  chmod 755 /opt/tor6ia/tor6ia-engine.new
+  mv -f /opt/tor6ia/tor6ia-engine.new /opt/tor6ia/tor6ia-engine
+
+  cat > /etc/systemd/system/tor6ia-relay.service <<EOF
+[Unit]
+Description=Tor6IA relay
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+DynamicUser=yes
+# It carries encrypted bytes between machines and keeps nothing. The limits protect this server:
+# speed of one pair of machines, speed in all, and what it may carry in a day.
+ExecStart=/opt/tor6ia/tor6ia-engine relay --listen 0.0.0.0:$RELAY_PORT --pair-mbps 16 --total-mbps 24 --daily-gb 20
+Restart=always
+RestartSec=2
+LimitNOFILE=8192
+MemoryMax=128M
+CPUQuota=50%
+Nice=10
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
+fi
+
 systemctl daemon-reload
 systemctl enable --quiet tor6ia-coordinator
+if [ "$RELAY_PORT" != 0 ]; then
+  systemctl enable --quiet tor6ia-relay
+  systemctl restart tor6ia-relay
+fi
 
 if [ ! -e "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
   # Same method as the certificates already on this server: the web server answers the challenge.

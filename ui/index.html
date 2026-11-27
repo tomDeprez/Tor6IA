@@ -127,9 +127,9 @@
   .linkish[hidden] { display: none; }
   .bar { height: 5px; background: var(--line); border-radius: 3px; margin-top: 8px; overflow: hidden; }
   .bar i { display: block; height: 100%; background: var(--s-work); width: 0; transition: width .4s; }
-  #holdDlg p { font-size: 14px; margin: 0 0 12px; }
-  #holdDlg label { display: block; margin: 0 0 12px; cursor: default; }
-  #holdDlg select { display: block; width: 100%; margin-top: 6px; }
+  #holdDlg p, #headDlg p { font-size: 14px; margin: 0 0 12px; }
+  #holdDlg label, #headDlg label { display: block; margin: 0 0 12px; cursor: default; }
+  #holdDlg select, #headDlg select { display: block; width: 100%; margin-top: 6px; }
   #holdDlg .range { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 14px; }
   #holdDlg input[type=number] { width: 72px; background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 7px 8px; font: inherit; }
   #holdDlg .warn { color: var(--debt); }
@@ -207,6 +207,7 @@
     <button type="button" class="linkish" id="mineChange"></button>
     <button type="button" class="linkish" id="splitOpen" data-t="splitOpen"></button>
     <button type="button" class="linkish" id="holdOpen" data-t="holdOpen"></button>
+    <button type="button" class="linkish" id="headOpen" data-t="headOpen"></button>
     <button type="button" class="linkish" id="mineStop"></button>
   </section>
 
@@ -223,6 +224,15 @@
       <code id="holdAnnounce" style="display:inline-block;margin-top:4px;user-select:all"></code>
     </div>
     <button type="button" class="linkish" id="holdStop" data-t="holdStop"></button>
+  </section>
+
+  <section id="headBox" hidden>
+    <h2 data-t="headTitle"></h2>
+    <div class="mine">
+      <div class="name" id="headName"></div>
+      <div class="note" id="headState"></div>
+    </div>
+    <button type="button" class="linkish" id="headStop" data-t="headStop"></button>
   </section>
 
   <section id="splitBox" hidden>
@@ -290,6 +300,18 @@
   <div class="acts" style="margin-top:18px"><button type="button" id="pNo" data-t="cancel"></button></div>
 </dialog>
 
+<dialog id="headDlg" aria-labelledby="cTitle">
+  <h3 id="cTitle" data-t="headAsk"></h3>
+  <p data-t="head1"></p>
+  <label><span data-t="holdModel"></span><select id="cModel"></select></label>
+  <p class="note" data-t="head2" style="margin:0 0 12px"></p>
+  <p class="msg err" id="cError" hidden></p>
+  <div class="acts">
+    <button type="button" id="cNo" data-t="cancel"></button>
+    <button type="button" class="go" id="cYes" data-t="headGo"></button>
+  </div>
+</dialog>
+
 <dialog id="holdDlg" aria-labelledby="hTitle">
   <h3 id="hTitle" data-t="holdAsk"></h3>
   <p data-t="hold1"></p>
@@ -331,7 +353,7 @@ const FR = {
   sOff: "Hors ligne", sOffWhy: "Coordinateur injoignable. Nouvel essai en cours.",
   sConnecting: "Connexion", sOllama: "Préparation", sOllamaWhy: "Démarrage d'Ollama",
   sInstall: "Installation", sInstallWhy: "Téléchargement d'Ollama", sPull: "Installation", sPullWhy: "Téléchargement de",
-  sIdle: "Connecté", sIdleWhy: "En attente d'un calcul. Clique pour mettre en pause.",
+  sHolding: "Ta machine porte des blocs. Elle ne partage pas de modèle entier :", sIdle: "Connecté", sIdleWhy: "En attente d'un calcul. Clique pour mettre en pause.",
   sWork: "Calcul en cours", sWorkWhy: "Ta machine travaille pour quelqu'un : tu gagnes des crédits.",
   sPaused: "En pause", sPausedWhy: "Tu ne partages pas. Clique pour reprendre.",
   sError: "Problème", sAlert: "Alerte",
@@ -382,6 +404,13 @@ const FR = {
   split1: "Le modèle est coupé en blocs de couches. Chaque machine du groupe en porte selon sa mémoire, et ta machine le propose au réseau. Tu peux ainsi partager un modèle trop gros pour une seule machine.",
   split2: "Sur chaque autre machine du groupe : « Porter des blocs d'un modèle… ». Elle affiche alors une ligne à copier ici.",
   splitModel: "Modèle à répartir", splitMachines: "La ligne de chaque machine, une par ligne",
+  headOpen: "Tenir les conversations d'un modèle en blocs…", headTitle: "Conversations tenues par ta machine",
+  headAsk: "Tenir les conversations d'un modèle en blocs", headGo: "Tenir ces conversations", headStop: "Ne plus tenir ces conversations",
+  head1: "Ta machine reçoit les questions et rend les réponses d'un modèle dont les couches sont portées par d'autres machines. Elle a besoin du fichier entier du modèle sur son disque, mais de peu de mémoire. Dès que chaque bloc a ses porteurs, le réseau lui donne une chaîne : elle propose alors le modèle et reçoit le paiement des réponses.",
+  head2: "Ta machine partage un seul modèle : celui-ci remplace le modèle partagé quand la chaîne se forme.",
+  headDownloading: "Téléchargement du fichier du modèle", headWaiting: "En attente des porteurs de blocs", headChained: "Chaîne formée par le réseau",
+  inBlocks: "En blocs :", blocksHeld: "portés", chainOn: "chaîne formée", noHead: "personne pour tenir la conversation", perBlock: "porteurs demandés pour chaque bloc",
+  holdNeeded: "Le réseau a surtout besoin des blocs", viaRelay: "par le relais",
   holdOpen: "Porter des blocs d'un modèle…", holdTitle: "Blocs portés par ta machine", holdStop: "Ne plus porter ces blocs",
   holdAsk: "Porter des blocs d'un modèle", holdGo: "Porter ces blocs",
   hold1: "Un gros modèle est découpé en blocs d'environ 1 Go. Ta machine en porte quelques-uns pour un groupe : elle ne télécharge que ceux-là, et calcule sa part de chaque réponse. Le serveur de blocs tourne enfermé : il ne peut ni lire tes fichiers, ni se connecter ailleurs, ni dépasser la mémoire de ses blocs.",
@@ -409,7 +438,7 @@ const EN = {
   sOff: "Offline", sOffWhy: "Coordinator unreachable. Trying again.",
   sConnecting: "Connecting", sOllama: "Preparing", sOllamaWhy: "Starting Ollama",
   sInstall: "Installing", sInstallWhy: "Downloading Ollama", sPull: "Installing", sPullWhy: "Downloading",
-  sIdle: "Connected", sIdleWhy: "Waiting for a job. Click to pause.",
+  sHolding: "Your machine holds blocks. It shares no whole model:", sIdle: "Connected", sIdleWhy: "Waiting for a job. Click to pause.",
   sWork: "Computing", sWorkWhy: "Your machine works for someone: you earn credits.",
   sPaused: "Paused", sPausedWhy: "You are not sharing. Click to resume.",
   sError: "Problem", sAlert: "Alert",
@@ -460,6 +489,13 @@ const EN = {
   split1: "The model is cut into blocks of layers. Each machine of the group holds some, according to its memory, and your machine offers it to the network. This way you can share a model too big for a single machine.",
   split2: "On every other machine of the group: \"Hold blocks of a model…\". It then shows a line to copy here.",
   splitModel: "Model to spread", splitMachines: "The line of each machine, one per line",
+  headOpen: "Hold the conversations of a model in blocks…", headTitle: "Conversations your machine holds",
+  headAsk: "Hold the conversations of a model in blocks", headGo: "Hold these conversations", headStop: "Stop holding these conversations",
+  head1: "Your machine receives the questions and gives the answers of a model whose layers are held by other machines. It needs the whole file of the model on its disk, but little memory. As soon as every block has its holders, the network gives it a chain: it then offers the model and is paid for the answers.",
+  head2: "Your machine shares one model: this one replaces the shared model when the chain is formed.",
+  headDownloading: "Downloading the model's file", headWaiting: "Waiting for block holders", headChained: "Chain formed by the network",
+  inBlocks: "In blocks:", blocksHeld: "held", chainOn: "chain formed", noHead: "nobody to hold the conversation", perBlock: "holders asked for each block",
+  holdNeeded: "The network mostly needs blocks", viaRelay: "through the relay",
   holdOpen: "Hold blocks of a model…", holdTitle: "Blocks your machine holds", holdStop: "Stop holding these blocks",
   holdAsk: "Hold blocks of a model", holdGo: "Hold these blocks",
   hold1: "A large model is cut into blocks of about 1 GB. Your machine holds a few of them for a group: it downloads only those, and computes its share of every answer. The block server runs locked in: it cannot read your files, connect anywhere or use more memory than its blocks need.",
@@ -519,6 +555,8 @@ function showEmpty() {
 function nodeState(s) {
   if (s.alert) return ["error", T.sAlert, s.alert];
   if (s.offline) return ["off", T.sOff, T.sOffWhy];
+  // A machine that cannot share a whole model can still hold blocks: that is not a problem to show in red.
+  if (s.phase === "error" && s.hold && s.hold.state !== "error") return ["idle", T.sIdle, `${T.sHolding} ${s.detail}`];
   if (s.phase === "error") return ["error", T.sError, s.detail];
   if (s.phase === "connecting") return ["setup", T.sConnecting, ""];
   if (s.phase === "ollama") return ["setup", T.sOllama, T.sOllamaWhy];
@@ -573,6 +611,7 @@ function paint(s) {
   paintSplit(s);
   paintMine(s);
   paintHold(s);
+  paintHead(s);
 
   $("nNodes").textContent = net ? num(net.workers) : "–";
   $("nJobs").textContent = net ? num(net.jobs_done) : "–";
@@ -583,7 +622,7 @@ function paint(s) {
 
   const mine = s.phase === "ready" ? (s.hosted || []) : [];
   const can = a ? Math.max(a.spendable, 0) : 0;
-  const sig = JSON.stringify([net.models.map(m => [m.id, m.workers, m.busy]), mine, can, s.pull, s.phase, s.capacity]);
+  const sig = JSON.stringify([net.models.map(m => [m.id, m.workers, m.busy, m.cover, m.heads, m.chained]), mine, can, s.pull, s.phase, s.capacity]);
   if (sig === catalogSig) return;
   catalogSig = sig;
   const sel = $("model"), keep = sel.value;
@@ -606,6 +645,15 @@ function paint(s) {
       : `≈ ${count(Math.floor(can / m.weight), T.tokenForYou, T.tokensForYou)}`;
     pick.append(top, el("span", "info", info));
     if (m.waiting) pick.append(el("span", "info wait", count(m.waiting, T.waitingOne, T.waitingMany)));
+    // A model held in blocks: how many of its blocks have a machine, and what is missing for a chain.
+    if (m.blocks && (m.cover || m.heads)) {
+      const cover = m.cover || [], held = cover.filter(c => c > 0).length, enough = cover.filter(c => c >= net.holders_per_block).length;
+      let text = `${T.inBlocks} ${count(held, T.blockOne, T.blockMany)} ${T.holdOf} ${m.blocks} ${T.blocksHeld}`;
+      if (m.chained) text += `, ${T.chainOn}`;
+      else if (held === m.blocks && enough < m.blocks) text += `, ${net.holders_per_block} ${T.perBlock}`;
+      else if (!m.heads) text += `, ${T.noHead}`;
+      pick.append(el("span", "info", text));
+    }
     pick.onclick = () => { sel.value = m.id; picked = true; markModel(); };
     row.append(pick);
     return row;
@@ -669,6 +717,8 @@ function paintSplit(s) {
   state.textContent = sp.state === "error" ? sp.error
     : sp.state === "starting" ? `${T.splitStarting} ${sp.model}, ${count(sp.machines.length, "machine", "machines")}…`
     : `${sp.model} ${T.splitReady} ${count(sp.blocks.length, T.blockOne, T.blockMany)}`;
+  // A chain the network made is ended by no longer holding its conversations, not from here.
+  $("splitStop").hidden = !!s.head;
   const blocks = sp.blocks || [];
   $("splitBar").hidden = !blocks.length;
   $("splitBar").replaceChildren(...blocks.map((b, i) => {
@@ -681,7 +731,9 @@ function paintSplit(s) {
     const row = el("div", "blockRow"), chip = el("span", "chip");
     chip.style.background = blockColours[i % blockColours.length];
     const held = b.blocks ? `${count(Number(b.blocks.split("-").pop()) - Number(b.blocks.split("-")[0]) + 1, T.blockOne, T.blockMany)} (${b.blocks}), ` : "";
-    row.append(chip, el("span", "where", b.machine), el("span", "what2", `${held}${T.layers} ${b.first} ${T.to} ${b.last}`));
+    // A machine is named by its first address. One reached through the relay says so.
+    const viaRelay = (b.route || "").startsWith("relay:") ? `, ${T.viaRelay}` : "";
+    row.append(chip, el("span", "where", b.machine.split("|")[0]), el("span", "what2", `${held}${T.layers} ${b.first} ${T.to} ${b.last}${viaRelay}`));
     return row;
   }));
 }
@@ -713,6 +765,41 @@ function paintHold(s) {
   $("holdAnnounce").textContent = h.announce || "";
 }
 
+// This machine holds the conversations of a model whose blocks are on other machines.
+function paintHead(s) {
+  const h = s.head;
+  $("headBox").hidden = !h;
+  $("headOpen").hidden = !!h;
+  if (!h) return;
+  const m = ((s.network && s.network.models) || []).find(x => x.id === h.model);
+  $("headName").textContent = m ? m.name : h.model;
+  const state = $("headState"), cover = (m && m.cover) || [];
+  state.style.color = h.state === "error" ? "var(--bad)" : "";
+  state.textContent = h.state === "error" ? h.error
+    : h.state === "downloading" ? `${T.headDownloading} : ${Math.round(h.pct)} %`
+    : h.state === "chained" ? T.headChained
+    : T.headWaiting + (m && m.blocks ? ` : ${count(cover.filter(c => c > 0).length, T.blockOne, T.blockMany)} ${T.holdOf} ${m.blocks} ${T.blocksHeld}` : "");
+}
+$("headOpen").addEventListener("click", () => {
+  const models = (last && last.network && last.network.models) || [];
+  $("cModel").replaceChildren(...models.map(m => new Option(`${m.name} (${m.size_gb} Go)`, m.id)));
+  $("cModel").value = models.length ? models[models.length - 1].id : "";
+  $("cError").hidden = true;
+  $("headDlg").showModal();
+});
+$("cNo").addEventListener("click", () => $("headDlg").close());
+$("cYes").addEventListener("click", async () => {
+  const resp = await post("/api/head", { on: true, model: $("cModel").value });
+  if (!resp.ok) {
+    $("cError").hidden = false;
+    $("cError").textContent = (await resp.json()).error;
+    return;
+  }
+  $("headDlg").close();
+  refresh();
+});
+$("headStop").addEventListener("click", async () => { await post("/api/head", { on: false }); refresh(); });
+
 // The dialog reads the plan of the chosen model: how many blocks it has, and how many this machine can hold.
 let planOf = null;
 async function readPlan() {
@@ -727,8 +814,18 @@ async function readPlan() {
   const n = plan.blocks.length, advised = plan.advised_blocks;
   $("holdPlan").textContent = `${n} ${T.holdBlocksOf} ${advised} ${T.holdAdvised}.` + (advised ? "" : " " + T.holdNone);
   for (const id of ["hFirst", "hLast"]) $(id).max = n;
-  $("hFirst").value = 1;
-  $("hLast").value = Math.max(1, advised);
+  // Among the runs of blocks this machine can hold, propose the one the fewest machines hold.
+  const known = ((last && last.network && last.network.models) || []).find(m => m.id === plan.model);
+  const cover = known && known.cover && known.cover.length === n ? known.cover : new Array(n).fill(0);
+  const size = Math.min(n, Math.max(1, advised));
+  let first = 1, fewest = Infinity;
+  for (let a = 0; a + size <= n; a++) {
+    const holders = cover.slice(a, a + size).reduce((x, y) => x + y, 0);
+    if (holders < fewest) { fewest = holders; first = a + 1; }
+  }
+  $("hFirst").value = first;
+  $("hLast").value = first + size - 1;
+  if (known && known.cover) $("holdPlan").textContent += ` ${T.holdNeeded} ${first} ${T.to} ${first + size - 1}.`;
   holdCost();
 }
 function holdCost() {

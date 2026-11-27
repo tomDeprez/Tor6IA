@@ -31,14 +31,14 @@ import (
 // That is why the user names them himself, and why the network cannot yet form groups of strangers.
 
 // engineRelease is the engine version this program drives, with the checksum of each build.
-const engineRelease = "v0.2.3"
+const engineRelease = "v0.2.4"
 
 var engineBuilds = map[string]string{
-	"windows/amd64": "7e1ee7b158bb60954d7b4c223633115e394a3373c391ae0ff0616997ca43b35f",
-	"linux/amd64":   "66d1e6edc8090f73ae2beb142208e2595f19b943856d854546cc13b644c71c4d",
-	"linux/arm64":   "b045aac9eeff4d0020d4a52ebe9063c37ad56064d9b9898b84862209f7459709",
-	"darwin/amd64":  "f16b3ed16342678ce653fde7eb8f9ce803a0c7317e5a3c0627d2f0b21fb7df71",
-	"darwin/arm64":  "1dcd4e7ca6227352011d3efff3fecdb894b14aa48c378444b8b58d54581653a5",
+	"windows/amd64": "3e75239d3692837cd827eef9cd98de950c3d92e9a594ef9514fcb0ed7352d357",
+	"linux/amd64":   "8c7f978e55882f8e53dbef8b59125f69815058c75df6dd46079079f3cc05a2de",
+	"linux/arm64":   "fc264d7cb1c140f007f7ea77520ed318197ad1f8a797895ee81ae230a9fbfb43",
+	"darwin/amd64":  "28c60e2f7c2acd7c5d7cddf099ff2d58b961dff9d4909aecb6e359d0b394c985",
+	"darwin/arm64":  "6900c118e44d4f48b5378edd216776df41702e17f3fbe2678ec8eb8c6186a0f0",
 }
 
 type SplitBlock struct {
@@ -47,6 +47,7 @@ type SplitBlock struct {
 	Last    int    `json:"last"`
 	Share   int    `json:"share"`  // percent of the model's layers
 	Blocks  string `json:"blocks"` // the blocks it announced, like 4-9, when it announced some
+	Route   string `json:"route"`  // how it is reached: its address, or relay:host:port
 }
 
 // SplitStatus is what the interface shows of the group.
@@ -282,12 +283,16 @@ func (n *Node) handleSplit(w http.ResponseWriter, r *http.Request) {
 	}
 	n.mu.Lock()
 	ready := n.phase == "ready"
+	heading := n.head != nil
 	running := n.split != nil && n.split.State != "error"
 	known := slices.ContainsFunc(n.catalog, func(m Model) bool { return m.ID == req.Model })
 	n.mu.Unlock()
 	switch {
 	case !ready:
 		refuse(409, "the machine is not ready yet")
+		return
+	case heading:
+		refuse(409, "this machine holds conversations for the network: stop that first")
 		return
 	case running:
 		refuse(409, "a model is already split: stop it first")

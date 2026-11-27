@@ -61,6 +61,8 @@ type Node struct {
 	stopEngine func()
 	hold       *HoldStatus // blocks this machine holds for the head of a group
 	stopHold   func()
+	head       *HeadStatus // this machine offers to hold the conversations of a model in blocks
+	chain      string      // the chain the coordinator gave it, "" when none
 	cancelPoll context.CancelFunc
 }
 
@@ -219,6 +221,14 @@ func (n *Node) setup(ctx context.Context, want string) {
 	n.mu.Lock()
 	n.catalog = net.Models
 	n.mu.Unlock()
+	// Blocks held before the restart are held again. This comes first: holding blocks needs neither
+	// Ollama nor the memory for a whole model, so a machine that can do nothing else still does this.
+	if raw, err := os.ReadFile(n.holdFile()); err == nil {
+		var cfg holdConfig
+		if json.Unmarshal(raw, &cfg) == nil && cfg.Model != "" {
+			go n.startHold(cfg)
+		}
+	}
 	offered := func(id string) int { return slices.IndexFunc(net.Models, func(m Model) bool { return m.ID == id }) }
 	if want != "" && offered(want) < 0 {
 		n.setPhase("error", 0, "this network does not offer the model "+want)
@@ -260,12 +270,9 @@ func (n *Node) setup(ctx context.Context, want string) {
 	n.saveModels()
 	log.Printf("ready: sharing %v", list)
 	n.setPhase("ready", 100, "")
-	// Blocks held before the restart are held again.
-	if raw, err := os.ReadFile(n.holdFile()); err == nil {
-		var cfg holdConfig
-		if json.Unmarshal(raw, &cfg) == nil && cfg.Model != "" {
-			go n.startHold(cfg)
-		}
+	// A machine that offered to be a head offers it again.
+	if raw, err := os.ReadFile(n.headFile()); err == nil && offered(strings.TrimSpace(string(raw))) >= 0 {
+		go n.becomeHead(strings.TrimSpace(string(raw)))
 	}
 	// A group set up before the restart is formed again.
 	if raw, err := os.ReadFile(n.splitFile()); err == nil {
@@ -425,6 +432,7 @@ func (n *Node) handleUninstall(w http.ResponseWriter, r *http.Request) {
 	}
 	n.stopSplit()
 	n.endHold()
+	n.endHead()
 	n.engineClean(true)                           // llama.cpp and the blocks the engine downloaded
 	os.RemoveAll(filepath.Join(n.home, "engine")) // the engine program this node downloaded
 	n.mu.Lock()
@@ -598,19 +606,27 @@ func (n *Node) chat(ctx context.Context, model string, pl Payload, onDelta func(
 		res, err := n.runModel(ctx, model, pl, func(d string) error { onDelta(d); return nil })
 		return Chunk{Done: true, PromptTokens: res.PromptTokens, CompletionTokens: res.CompletionTokens, Truncated: res.Truncated}, true, err
 	}
-	// Failover: a machine that goes away before sending anything costs nothing, so another one is asked.
-	// Once text has reached the user the answer cannot be restarted, and the error is shown.
+	// Failover: when a machine goes away, another one is asked. If text had already reached the
+	// user, the next machine is given that text as the start of its answer and goes on from there:
+	// the answer is finished, not started again.
 	var final Chunk
 	var err error
+	var written strings.Builder
 	for attempt := 0; attempt < 3; attempt++ {
-		var started bool
-		final, started, err = n.chatRemote(ctx, model, pl, onDelta)
+		ask := pl
+		if written.Len() > 0 {
+			ask.Messages = append(slices.Clone(pl.Messages), Message{Role: "assistant", Content: written.String()})
+			if pl.MaxTokens > 0 {
+				ask.MaxTokens = max(16, pl.MaxTokens-written.Len()/4)
+			}
+		}
+		final, _, err = n.chatRemote(ctx, model, ask, func(d string) { written.WriteString(d); onDelta(d) })
 		var refused *apiError
 		// unknown_job: the reserved machine left before the job started, so nothing was spent either.
-		if err == nil || started || ctx.Err() != nil || (errors.As(err, &refused) && refused.Code != "unknown_job") {
+		if err == nil || ctx.Err() != nil || (errors.As(err, &refused) && refused.Code != "unknown_job") {
 			break
 		}
-		log.Printf("machine failed before answering (%v): asking another one", err)
+		log.Printf("machine failed after %d bytes of answer (%v): asking another one", written.Len(), err)
 	}
 	return final, false, err
 }
@@ -624,7 +640,7 @@ func (n *Node) chatRemote(ctx context.Context, model string, pl Payload, onDelta
 	if !validWorkerKey(nj) {
 		// The key offered is not the paid machine's: someone in the middle wants to read the prompt.
 		n.raise("the coordinator offered an encryption key that does not belong to the machine being paid")
-		return Chunk{}, true, errors.New("job refused: the encryption key is not the paid machine's") // true: do not try again
+		return Chunk{}, false, &apiError{Code: "bad_key", Msg: "job refused: the encryption key is not the paid machine's"} // a refusal: not tried again
 	}
 	priv, err := ecdh.X25519().GenerateKey(rand.Reader)
 	if err != nil {
@@ -689,6 +705,7 @@ func (n *Node) Handler(hostport string) http.Handler {
 	mux.HandleFunc("POST /api/split", n.handleSplit)
 	mux.HandleFunc("GET /api/plan", n.handlePlan)
 	mux.HandleFunc("POST /api/hold", n.handleHold)
+	mux.HandleFunc("POST /api/head", n.handleHead)
 	mux.HandleFunc("POST /api/uninstall", n.handleUninstall)
 	mux.HandleFunc("POST /api/update", n.handleUpdate)
 	mux.HandleFunc("GET /v1/models", n.handleModels)
@@ -724,6 +741,7 @@ type Status struct {
 	Update      *Update           `json:"update"`
 	Split       *SplitStatus      `json:"split"`
 	Hold        *HoldStatus       `json:"hold"`
+	Head        *HeadStatus       `json:"head"`
 	Account     *Account          `json:"account"`
 	Network     *Network          `json:"network"`
 }
@@ -749,6 +767,10 @@ func (n *Node) handleStatus(w http.ResponseWriter, r *http.Request) {
 	if n.hold != nil {
 		hold := *n.hold
 		s.Hold = &hold
+	}
+	if n.head != nil {
+		head := *n.head
+		s.Head = &head
 	}
 	n.mu.Unlock()
 	var me Me

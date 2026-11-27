@@ -20,7 +20,12 @@ import (
 // deletedModel is the last model the fake Ollama was asked to delete.
 var deletedModel atomic.Value
 
-// fakeOllama answers /api/chat by echoing the last message word by word.
+// cutAfter makes the fake Ollama drop the connection after that many words, once: a machine that
+// leaves in the middle of an answer.
+var cutAfter atomic.Int32
+
+// fakeOllama answers /api/chat by echoing the last message word by word. When the last message
+// is an answer already begun, it goes on from there, as a real model does.
 // Setting failNext makes the next call fail, like a machine whose model crashed.
 func fakeOllama(t *testing.T) (string, *atomic.Bool) {
 	failNext := new(atomic.Bool)
@@ -38,8 +43,15 @@ func fakeOllama(t *testing.T) (string, *atomic.Bool) {
 		var req struct{ Messages []Message }
 		json.NewDecoder(r.Body).Decode(&req)
 		words := strings.Fields(req.Messages[len(req.Messages)-1].Content)
+		if last := req.Messages[len(req.Messages)-1]; last.Role == "assistant" {
+			words = strings.Fields(req.Messages[len(req.Messages)-2].Content)[len(words):]
+		}
 		enc := json.NewEncoder(w)
-		for _, word := range words {
+		for i, word := range words {
+			if cut := int(cutAfter.Load()); cut > 0 && i == cut {
+				cutAfter.Store(0)
+				panic(http.ErrAbortHandler)
+			}
 			enc.Encode(map[string]any{"message": map[string]string{"content": word + " "}})
 			w.(http.Flusher).Flush()
 		}
@@ -202,6 +214,15 @@ func TestNetwork(t *testing.T) {
 		t.Fatalf("failover: paid %d, the one answer cost %d", paid, final.Cost)
 	}
 
+	// A machine leaves in the middle of an answer: the next one is given what was written and
+	// goes on from there. The user reads one whole answer.
+	cutAfter.Store(2)
+	got.Reset()
+	_, _, err = user.chat(ctx, "big", ask("one two three four five", 0), func(d string) { got.WriteString(d) })
+	if err != nil || got.String() != "one two three four five " || cutAfter.Load() != 0 {
+		t.Fatalf("answer taken over: err=%v answer=%q", err, got.String())
+	}
+
 	// The ledger refuses what the rules forbid, even when the coordinator itself asks.
 	wk, uk := worker.id.Key(), user.id.Key()
 	sign := func(job string, max int64) []byte {
@@ -229,7 +250,7 @@ func TestNetwork(t *testing.T) {
 	// Any node can verify the whole public ledger, twice in a row (the second run uses the checkpoint).
 	for i := 0; i < 2; i++ {
 		res, err := user.audit(ctx)
-		if err != nil || res.Entries != 5 || res.Circulating != c.ledger.balance(wk) {
+		if err != nil || res.Entries != 7 || res.Circulating != c.ledger.balance(wk) {
 			t.Fatalf("audit %d: %+v %v", i, res, err)
 		}
 	}
@@ -254,10 +275,10 @@ func TestNetwork(t *testing.T) {
 			t.Fatalf("%s: audit said %v, want a rule violation", name, err)
 		}
 	}
-	if _, err := auditChain(bytes.NewReader(raw), key, 5, Checkpoint{Key: key, Seq: 2, Hash: "other"}); !errors.As(err, &rule) {
+	if _, err := auditChain(bytes.NewReader(raw), key, 7, Checkpoint{Key: key, Seq: 2, Hash: "other"}); !errors.As(err, &rule) {
 		t.Fatalf("rewritten history: audit said %v, want a rule violation", err)
 	}
-	if _, err := auditChain(bytes.NewReader(raw), key, 6, Checkpoint{}); err != errIncomplete {
+	if _, err := auditChain(bytes.NewReader(raw), key, 8, Checkpoint{}); err != errIncomplete {
 		t.Fatalf("short download: audit said %v, want errIncomplete", err)
 	}
 

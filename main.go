@@ -125,6 +125,7 @@ func runNode(args []string) error {
 	go n.setup(ctx, *model)
 	go n.workLoop(ctx)
 	go n.auditLoop(ctx)
+	go n.blocksLoop(ctx)
 	go n.updateLoop(ctx)
 
 	fmt.Println("Tor6IA", version)
@@ -196,6 +197,9 @@ func runCoordinator(args []string) error {
 	trust := fs.Bool("trust-proxy", false, "read client IPs from X-Forwarded-For (only behind your own reverse proxy)")
 	cert := fs.String("tls-cert", "", "TLS certificate file: serve HTTPS directly, without a reverse proxy")
 	key := fs.String("tls-key", "", "TLS private key file")
+	relay := fs.String("relay", "", "host:port of a relay (tor6ia-engine relay) that joins machines unable to reach each other")
+	perBlock := fs.Int("holders-per-block", 2, "machines that must hold each block of a model before a chain is formed")
+	canary := fs.Duration("canary-every", 10*time.Minute, "how often one address is sent a test job")
 	fs.Parse(args)
 
 	if *data == "" {
@@ -209,7 +213,7 @@ func runCoordinator(args []string) error {
 	if err != nil {
 		return err
 	}
-	c.TrustProxy = *trust
+	c.TrustProxy, c.Relay, c.HoldersPerBlock, c.CanaryEvery = *trust, *relay, max(1, *perBlock), *canary
 	go c.Run(context.Background())
 	log.Printf("Tor6IA coordinator %s on %s, data in %s", version, *addr, *data)
 	srv := &http.Server{Addr: *addr, Handler: c.Handler(), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute}

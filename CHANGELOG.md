@@ -2,6 +2,26 @@
 
 Each `## vX.Y.Z` section becomes the notes of that release, and the text of the update window in the program.
 
+## v0.4.0
+
+**Français**
+- Le réseau forme les groupes tout seul. Des machines portent des blocs, une machine tient les conversations, et le coordinateur les assemble en chaîne dès que chaque bloc a ses porteurs. Plus de ligne à échanger.
+- « Tenir les conversations d'un modèle en blocs… » : ta machine reçoit les questions d'un modèle dont les couches sont sur d'autres machines. Il lui faut le fichier du modèle, peu de mémoire.
+- La liste des modèles affiche les blocs portés : « En blocs : 4 blocs sur 6 portés », puis « chaîne formée ».
+- La fenêtre « Porter des blocs » propose les blocs dont le réseau manque le plus.
+- Un relais joint les machines qui ne peuvent pas se joindre directement : porter des blocs derrière une box ne demande aucun port ouvert. Il ne voit jamais ce qui passe.
+- Quand une machine part au milieu d'une réponse, une autre reprend là où le texte s'était arrêté : la réponse se termine au lieu d'échouer. Vrai aussi pour les modèles entiers.
+- Deux porteurs sur la même machine ne se disputent plus le port.
+
+**English**
+- The network forms the groups by itself. Machines hold blocks, one machine holds the conversations, and the coordinator puts them in a chain as soon as every block has its holders. No more line to exchange.
+- "Hold the conversations of a model in blocks…": your machine receives the questions of a model whose layers are on other machines. It needs the model's file, little memory.
+- The list of models shows the blocks held: "In blocks: 4 blocks of 6 held", then "chain formed".
+- The "Hold blocks" window proposes the blocks the network lacks most.
+- A relay joins machines that cannot reach each other directly: holding blocks behind a home router needs no open port. It never sees what passes.
+- When a machine leaves in the middle of an answer, another one goes on from where the text stopped: the answer is finished instead of failing. True for whole models too.
+- Two holders on the same machine no longer fight for the port.
+
 ## v0.3.0
 
 **Français**

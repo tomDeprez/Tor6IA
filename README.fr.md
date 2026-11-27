@@ -113,7 +113,25 @@ Le serveur de blocs tourne enfermé : il ne peut ni lire tes fichiers, ni se con
 
 L'interface affiche alors le découpage : une barre pour le modèle, un segment par bloc, et quelle machine porte quelles couches. Si une machine du groupe s'en va, le modèle n'est plus réparti et l'interface le dit ; ta machine continue à le proposer seule si elle en a la mémoire.
 
-**Entre personnes que tu as choisies.** Ce qui passe entre les machines d'un groupe est chiffré, et une machine n'obéit qu'à qui a sa ligne. Les machines doivent pouvoir se joindre : même réseau, VPN, ou port ouvert. Les groupes d'inconnus formés par le réseau lui-même sont la prochaine étape du moteur, pas encore construite. Mesuré sur un portable, Gemma 4 12B coupé en deux répond à 3,3 tokens par seconde, et encore 1,9 avec 50 ms de délai réseau dans chaque sens.
+**Entre personnes que tu as choisies.** Ce qui passe entre les machines d'un groupe est chiffré, et une machine n'obéit qu'à qui a sa ligne. Pour un groupe formé à la main, les machines doivent pouvoir se joindre : même réseau, VPN, ou port ouvert.
+
+### Le réseau forme les groupes
+
+Personne n'a de ligne à échanger. Chaque machine dit ce qu'elle fait, et le coordinateur assemble les machines :
+
+1. **Porter des blocs d'un modèle…** sur plusieurs machines. Chacune annonce ses blocs au réseau, et la fenêtre propose les blocs que le moins de machines portent. Une machine derrière une box est jointe par le relais du réseau : elle n'ouvre aucun port.
+2. **Tenir les conversations d'un modèle en blocs…** sur une machine qui a la place sur son disque pour le fichier entier du modèle. Elle a besoin de peu de mémoire.
+3. Quand chaque bloc a ses porteurs (deux par bloc sur le réseau public, pour que l'un puisse partir) et qu'une machine tient les conversations, le coordinateur donne à cette machine une chaîne, un porteur pour chaque bloc. Elle charge le modèle sur eux et le propose à tous, comme n'importe quel modèle.
+
+La liste des modèles le montre en direct : « En blocs : 4 blocs sur 6 portés », puis « chaîne formée ». Quand une machine de la chaîne part, le coordinateur refait une chaîne avec les porteurs qui restent, et une réponse en cours d'écriture reprend là où elle s'était arrêtée.
+
+Le relais fait passer ce que les machines échangent quand elles ne peuvent pas se joindre directement. Il voit qui parle à qui et combien, jamais quoi : le lien entre deux machines est chiffré de bout en bout. Deux machines du même réseau se parlent directement, sans le relais.
+
+À savoir avant de porter des blocs ou des conversations pour des inconnus :
+
+- Les machines d'une chaîne voient passer les nombres du calcul, pas le texte. La machine qui tient la conversation voit le texte, comme toute machine qui répond.
+- Pour l'instant le paiement d'une réponse va à la machine qui tient la conversation. Le partager entre les porteurs, chacun selon ses blocs, est la prochaine étape.
+- Le coordinateur donne la ligne d'un porteur à la machine qu'il a choisie pour tenir les conversations. Une ligne permet à cette machine d'utiliser les blocs. Mesuré sur un portable, Gemma 4 12B coupé en deux répond à 3,3 tokens par seconde, et encore 1,9 avec 50 ms de délai réseau dans chaque sens.
 
 ## Les crédits
 
@@ -219,7 +237,7 @@ Les nœuds ne reçoivent aucune connexion entrante : ils interrogent le coordina
 
 ## Limites connues
 
-- **Le réseau ne forme pas les groupes lui-même.** Un modèle peut être réparti entre des machines de confiance, réglées à la main. Entre inconnus, chaque modèle tourne encore en entier sur une seule machine.
+- **Les modèles en blocs sont jeunes.** Le réseau forme les chaînes, mais le paiement d'une réponse va encore à la machine qui tient la conversation, pas aux porteurs de ses blocs, et rien ne détecte encore un porteur qui calcule faux. Une machine qui tient des conversations peut utiliser hors du réseau les blocs qu'on lui a donnés.
 - **La machine qui calcule lit ta question.** Elle ne sait pas de qui elle vient, mais n'envoie rien de secret.
 - **Le coordinateur reste un point de confiance pour trois choses.** Il attribue les machines : la clé de chiffrement est signée par le compte payé, donc il ne peut pas lire un job envoyé à la machine de quelqu'un d'autre, mais il pourrait envoyer ton job à une machine qu'il fait tourner lui-même. Il compte les octets des réponses : ton nœud recompte ce qu'il paie, pas encore ce qu'il gagne. Il accorde les découverts : il pourrait en accorder à de faux comptes, mais chacun est plafonné à 200 et visible dans le registre.
 - **Un compte peut partir avec sa dette.** Le découvert de 200 est le coût d'entrée du réseau. Le test par adresse IP le limite, plusieurs adresses le contournent.
@@ -249,6 +267,8 @@ Aucune dépendance hors de la bibliothèque standard de Go.
 | `ollama.go` | installation d'Ollama, modèles, détection du matériel |
 | `split.go` | un modèle réparti sur un groupe de machines, avec le moteur Tor6IA |
 | `hold.go` | les blocs que cette machine porte pour un groupe |
+| `head.go` | cette machine en tête d'une chaîne formée par le réseau |
+| `chain.go` | le registre des blocs du coordinateur, et la formation des chaînes |
 | `ui/index.html` | interface |
 | `deploy.ps1`, `deploy/remote.sh` | déploiement du coordinateur |
 
