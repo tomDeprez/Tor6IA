@@ -1,15 +1,34 @@
+<p align="center"><img src="docs/banner.svg" alt="Tor6IA: share your computer, use bigger AI models" width="100%"></p>
+
 # Tor6IA: share your computer, use bigger AI models
 
-[![CI](https://github.com/tomDeprez/Tor6IA/actions/workflows/ci.yml/badge.svg)](https://github.com/tomDeprez/Tor6IA/actions/workflows/ci.yml)
-[![Latest release](https://img.shields.io/github/v/release/tomDeprez/Tor6IA)](https://github.com/tomDeprez/Tor6IA/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/tomDeprez/Tor6IA/total)](https://github.com/tomDeprez/Tor6IA/releases)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+<p align="center">
+  <a href="https://github.com/tomDeprez/Tor6IA/actions/workflows/ci.yml"><img src="https://github.com/tomDeprez/Tor6IA/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/tomDeprez/Tor6IA/releases/latest"><img src="https://img.shields.io/github/v/release/tomDeprez/Tor6IA" alt="Latest release"></a>
+  <a href="https://github.com/tomDeprez/Tor6IA/releases"><img src="https://img.shields.io/github/downloads/tomDeprez/Tor6IA/total" alt="Downloads"></a>
+  <a href="https://github.com/tomDeprez/Tor6IA/stargazers"><img src="https://img.shields.io/github/stars/tomDeprez/Tor6IA" alt="Stars"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License: MIT"></a>
+</p>
 
 **Tor6IA is a peer-to-peer network for running open LLMs.** Your machine runs a model for other people and earns credits. You spend those credits on the models other machines run, including models too large for your own computer.
 
-One file to install. No account. End-to-end encrypted. OpenAI-compatible API. Built on [Ollama](https://ollama.com).
+It is simple: one file, no account, nothing to configure. [Français](README.fr.md)
 
-[Français](README.fr.md)
+<p align="center">
+  <a href="https://github.com/tomDeprez/Tor6IA/releases/latest/download/tor6ia-windows-amd64.exe"><img src="https://img.shields.io/badge/Download_for_Windows-tor6ia.exe-1c7a4c?style=for-the-badge" alt="Download for Windows"></a>
+  &nbsp;
+  <a href="#linux-and-macos"><img src="https://img.shields.io/badge/Linux_and_macOS-one_command-1f5fd1?style=for-the-badge" alt="Linux and macOS: one command"></a>
+</p>
+
+<p align="center"><img src="docs/screenshot.png" alt="The Tor6IA interface: connection state, credits, models and chat" width="900"></p>
+
+## Three steps
+
+| | |
+|---|---|
+| **1. Install** | Double-click one file on Windows, or paste one command on Linux and macOS. Ollama and the model are installed for you. |
+| **2. Your machine shares** | The big button turns green: you are connected. When someone uses your machine it turns blue, and you earn credits. |
+| **3. Use any model** | Chat in the interface, or point any OpenAI client at `http://localhost:7606/v1`. Your credits pay for models bigger than your machine. |
 
 ## Install
 
@@ -31,7 +50,7 @@ irm https://raw.githubusercontent.com/tomDeprez/Tor6IA/main/install.ps1 | iex
 curl -fsSL https://raw.githubusercontent.com/tomDeprez/Tor6IA/main/install.sh | sh
 ```
 
-The interface opens on `http://localhost:7606`.
+The interface opens on `http://localhost:7606`. Every release runs this command on clean Linux and macOS machines and asks the model a question.
 
 ## Why
 
@@ -119,10 +138,7 @@ Text only: no images, no tool calls.
 
 ## How it works
 
-```
-you ── encrypted prompt ──▶ coordinator ── encrypted prompt ──▶ machine that computes
-you ◀── encrypted answer ── coordinator ◀── encrypted answer ── (local Ollama)
-```
+<p align="center"><img src="docs/how-it-works.svg" alt="Your prompt goes encrypted through the coordinator to a machine that computes; credits move from you to that machine on a public ledger" width="100%"></p>
 
 1. Your node asks for a model. The coordinator reserves the fastest free machine and returns its public key.
 2. Your node encrypts the conversation for that machine (X25519, AES-256-GCM) and signs the highest price it accepts.
@@ -208,3 +224,7 @@ No dependency outside the Go standard library.
 | `ollama.go` | Ollama install, models, hardware detection |
 | `ui/index.html` | interface |
 | `deploy.ps1`, `deploy/remote.sh` | coordinator deployment |
+
+## Star history
+
+[![Star history of Tor6IA](https://api.star-history.com/svg?repos=tomDeprez/Tor6IA&type=Date)](https://star-history.com/#tomDeprez/Tor6IA&Date)

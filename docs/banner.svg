@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 340" role="img" aria-labelledby="t d">
+  <title id="t">Tor6IA</title>
+  <desc id="d">Share your computer. Use bigger AI models. One file to install, end-to-end encrypted, fair credits on a public ledger.</desc>
+  <defs>
+    <radialGradient id="glow" cx="78%" cy="20%" r="70%">
+      <stop offset="0" stop-color="#1f8f58" stop-opacity=".45"/>
+      <stop offset="1" stop-color="#111311" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="340" rx="24" fill="#111311"/>
+  <rect width="1200" height="340" rx="24" fill="url(#glow)"/>
+
+  <!-- machines joined in a ring: the network -->
+  <g fill="none" stroke="#58cf94" stroke-width="2" opacity=".85">
+    <path d="M940 78 L1052 132 L1052 214 L940 268 L828 214 L828 132 Z" stroke-opacity=".35"/>
+    <path d="M940 78 L940 268 M828 132 L1052 214 M1052 132 L828 214" stroke-opacity=".18"/>
+  </g>
+  <g fill="#111311" stroke="#58cf94" stroke-width="2.5">
+    <circle cx="940" cy="78" r="15"/><circle cx="1052" cy="132" r="11"/><circle cx="1052" cy="214" r="19"/>
+    <circle cx="940" cy="268" r="11"/><circle cx="828" cy="214" r="15"/><circle cx="828" cy="132" r="11"/>
+  </g>
+  <circle cx="940" cy="173" r="30" fill="#58cf94"/>
+  <text x="940" y="184" text-anchor="middle" font-family="Georgia, 'Iowan Old Style', serif" font-size="32" font-weight="600" fill="#08130d">6</text>
+
+  <text x="72" y="132" font-family="Georgia, 'Iowan Old Style', serif" font-size="84" font-weight="600" fill="#ecebe4">Tor<tspan fill="#58cf94">6</tspan>IA</text>
+  <text x="74" y="186" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="30" fill="#ecebe4">Share your computer. Use bigger AI models.</text>
+
+  <g font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="18" fill="#ecebe4">
+    <rect x="72" y="232" width="150" height="42" rx="21" fill="#1f8f58"/>
+    <text x="147" y="259" text-anchor="middle" font-weight="600">One file to install</text>
+    <rect x="236" y="232" width="232" height="42" rx="21" fill="none" stroke="#58cf94" stroke-width="1.5"/>
+    <text x="352" y="259" text-anchor="middle">End-to-end encrypted</text>
+    <rect x="482" y="232" width="260" height="42" rx="21" fill="none" stroke="#58cf94" stroke-width="1.5"/>
+    <text x="612" y="259" text-anchor="middle">Fair credits, public ledger</text>
+  </g>
+</svg>

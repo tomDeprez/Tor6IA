@@ -1,15 +1,42 @@
+<p align="center"><img src="docs/banner.svg" alt="Tor6IA : partage ta machine, utilise de plus gros modèles d'IA" width="100%"></p>
+
 # Tor6IA : partage ta machine, utilise de plus gros modèles d'IA
 
-[English](README.md)
+<p align="center">
+  <a href="https://github.com/tomDeprez/Tor6IA/actions/workflows/ci.yml"><img src="https://github.com/tomDeprez/Tor6IA/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/tomDeprez/Tor6IA/releases/latest"><img src="https://img.shields.io/github/v/release/tomDeprez/Tor6IA" alt="Latest release"></a>
+  <a href="https://github.com/tomDeprez/Tor6IA/releases"><img src="https://img.shields.io/github/downloads/tomDeprez/Tor6IA/total" alt="Downloads"></a>
+  <a href="https://github.com/tomDeprez/Tor6IA/stargazers"><img src="https://img.shields.io/github/stars/tomDeprez/Tor6IA" alt="Stars"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License: MIT"></a>
+</p>
 
-L'IA en commun. Tu prêtes ta machine pour calculer, tu gagnes des crédits. Tu dépenses ces crédits pour utiliser les modèles que font tourner les autres machines, y compris ceux trop gros pour la tienne.
+**Tor6IA est un réseau pair à pair pour faire tourner des modèles d'IA ouverts.** Ta machine calcule pour les autres et gagne des crédits. Tu dépenses ces crédits pour utiliser les modèles des autres machines, y compris ceux trop gros pour la tienne.
 
-- **Un seul fichier.** `tor6ia.exe` installe Ollama, choisit le modèle adapté à ta machine, le télécharge et ouvre l'interface.
-- **Zéro compte.** Ton identité est une clé créée sur ta machine. Pas d'e-mail, pas de mot de passe.
+C'est simple : un fichier, aucun compte, rien à configurer. [English](README.md)
+
+<p align="center">
+  <a href="https://github.com/tomDeprez/Tor6IA/releases/latest/download/tor6ia-windows-amd64.exe"><img src="https://img.shields.io/badge/T%C3%A9l%C3%A9charger_pour_Windows-tor6ia.exe-1c7a4c?style=for-the-badge" alt="Télécharger pour Windows"></a>
+  &nbsp;
+  <a href="#linux-et-macos"><img src="https://img.shields.io/badge/Linux_et_macOS-une_commande-1f5fd1?style=for-the-badge" alt="Linux et macOS : une commande"></a>
+</p>
+
+<p align="center"><img src="docs/screenshot.png" alt="L'interface de Tor6IA : état de connexion, crédits, modèles et discussion" width="900"></p>
+
+## Trois étapes
+
+| | |
+|---|---|
+| **1. Installe** | Double-clique sur un fichier sous Windows, ou colle une commande sous Linux et macOS. Ollama et le modèle sont installés pour toi. |
+| **2. Ta machine partage** | Le gros bouton passe au vert : tu es connecté. Quand quelqu'un utilise ta machine il passe au bleu, et tu gagnes des crédits. |
+| **3. Utilise n'importe quel modèle** | Discute dans l'interface, ou branche n'importe quel client OpenAI sur `http://localhost:7606/v1`. Tes crédits paient des modèles plus gros que ta machine. |
+
+## Pourquoi
+
 - **Équitable.** Aucun crédit n'est jamais créé. Tu gagnes exactement ce qu'une autre personne paie pour le calcul fait sur ta machine.
-- **Vérifiable.** Le registre des crédits est public, chaîné et signé. Chaque nœud le vérifie tout seul.
-- **Chiffré de bout en bout.** Le coordinateur sait qui demande mais ne peut pas lire. La machine qui répond lit le message mais ne sait pas qui l'envoie.
-- **API compatible OpenAI** sur `http://localhost:7606/v1` : tes outils habituels fonctionnent.
+- **Vérifiable.** Le registre des crédits est public, chaîné et signé, comme une blockchain. Chaque nœud le vérifie tout seul.
+- **Privé.** Questions et réponses sont chiffrées de bout en bout. Le coordinateur sait qui demande mais ne peut pas lire. La machine qui répond lit le message mais ne sait pas qui l'envoie.
+- **Zéro compte.** Ton identité est une clé créée sur ta machine. Pas d'e-mail, pas de mot de passe.
+- **Compatible avec tes outils.** API compatible OpenAI sur `http://localhost:7606/v1`.
 
 ## Installer
 
@@ -31,9 +58,9 @@ irm https://raw.githubusercontent.com/tomDeprez/Tor6IA/main/install.ps1 | iex
 curl -fsSL https://raw.githubusercontent.com/tomDeprez/Tor6IA/main/install.sh | sh
 ```
 
-L'interface s'ouvre sur `http://localhost:7606`.
+L'interface s'ouvre sur `http://localhost:7606`. Chaque version lance cette commande sur des machines Linux et macOS vierges et pose une question au modèle.
 
-Désinstaller sous Windows : télécharge `install.ps1` puis `.\install.ps1 -Uninstall`. Ton compte et tes crédits restent dans `%APPDATA%\Tor6IA`.
+Désinstaller : bouton **Désinstaller Tor6IA…** en bas de l'interface.
 
 ## L'interface
 
@@ -159,10 +186,7 @@ Seul le texte est accepté : pas d'images, pas d'appels d'outils.
 
 ## Comment ça marche
 
-```
-toi ── question chiffrée ──▶ coordinateur ── question chiffrée ──▶ machine qui calcule
-toi ◀── réponse chiffrée ─── coordinateur ◀── réponse chiffrée ─── (Ollama local)
-```
+<p align="center"><img src="docs/how-it-works.svg" alt="Ta question passe chiffrée par le coordinateur jusqu'à une machine qui calcule ; les crédits vont de toi à cette machine, dans un registre public" width="100%"></p>
 
 1. Ton nœud demande un modèle. Le coordinateur réserve la machine libre la plus rapide et renvoie sa clé publique.
 2. Ton nœud chiffre la conversation pour cette machine (X25519, AES-256-GCM) et signe le prix maximal.
@@ -203,3 +227,7 @@ Aucune dépendance hors de la bibliothèque standard de Go.
 | `ollama.go` | installation d'Ollama, modèles, détection du matériel |
 | `ui/index.html` | interface |
 | `deploy.ps1`, `deploy/remote.sh` | déploiement du coordinateur |
+
+## Historique des étoiles
+
+[![Star history of Tor6IA](https://api.star-history.com/svg?repos=tomDeprez/Tor6IA&type=Date)](https://star-history.com/#tomDeprez/Tor6IA&Date)
