@@ -1,0 +1,113 @@
+name: CI
+
+# Every push and pull request: format, vet, tests.
+# A tag vX.Y.Z also deploys the coordinator (when configured) and publishes the release.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - name: Format
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then echo "Run gofmt on: $unformatted"; exit 1; fi
+      - run: go vet ./...
+      - run: go test ./...
+
+  # Runs only when the repository variable DEPLOY_SERVER is set. See README, "Pipeline".
+  deploy:
+    if: startsWith(github.ref, 'refs/tags/v') && vars.DEPLOY_SERVER != ''
+    needs: test
+    runs-on: ubuntu-latest
+    concurrency: deploy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - name: SSH key and pinned host key
+        env:
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOSTS: ${{ vars.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/deploy
+          chmod 600 ~/.ssh/deploy
+          printf '%s\n' "$HOSTS" > ~/.ssh/known_hosts
+      - name: Deploy the coordinator
+        shell: pwsh
+        env:
+          SERVER: ${{ vars.DEPLOY_SERVER }}
+          DOMAIN: ${{ vars.DEPLOY_DOMAIN }}
+          TAG: ${{ github.ref_name }}
+        run: ./deploy.ps1 -Server $env:SERVER -Domain $env:DOMAIN -Key "$HOME/.ssh/deploy" -Version $env:TAG
+
+  # The clients are published after the coordinator they talk to is live (or when no deploy is configured).
+  release:
+    if: ${{ !failure() && !cancelled() && startsWith(github.ref, 'refs/tags/v') }}
+    needs: [test, deploy]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - name: Build
+        shell: pwsh
+        env:
+          COORDINATOR: ${{ vars.COORDINATOR_URL }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if (-not $env:COORDINATOR) { throw "Set the repository variable COORDINATOR_URL: the released clients must know their network." }
+          ./build.ps1 -Coordinator $env:COORDINATOR -Version $env:TAG
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: gh release create "$TAG" dist/tor6ia-* --title "$TAG" --generate-notes
+
+  # Runs the documented one-line install on clean machines, then checks that the node really answers.
+  install-test:
+    if: ${{ !cancelled() && needs.release.result == 'success' }}
+    needs: release
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install with the documented script
+        run: T6_NO_START=1 sh install.sh
+      - name: Start alone and wait until the machine has passed its test job
+        run: |
+          # --coordinator "" is solo mode: the test must not add accounts to the public ledger.
+          "$HOME/.local/bin/tor6ia" start --no-browser --coordinator "" > node.log 2>&1 &
+          for _ in $(seq 1 360); do
+            status=$(curl -fs http://127.0.0.1:7606/api/status || true)
+            case "$status" in
+              *'"vouched":true'*) echo "ready"; exit 0 ;;
+              *'"phase":"error"'*) break ;;
+            esac
+            sleep 5
+          done
+          echo "$status"; cat node.log; exit 1
+      - name: Ask the local model
+        run: |
+          curl -fs -m 600 http://127.0.0.1:7606/v1/chat/completions -H 'Content-Type: application/json'             -d '{"model":"llama3.2:3b","max_tokens":20,"messages":[{"role":"user","content":"Say hello."}]}' | tee answer.json
+          grep -q '"content":"..' answer.json
